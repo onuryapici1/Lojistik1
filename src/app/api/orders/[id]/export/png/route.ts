@@ -4,6 +4,9 @@ import { renderOrderPng } from "@/lib/render";
 import { getOrder } from "@/lib/orders";
 import { contentDispositionHeader } from "@/lib/contentDisposition";
 
+// PNG üretimi bir tarayıcı başlattığından varsayılan süre sınırına takılabilir.
+export const maxDuration = 60;
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const order = await getOrder(id);
