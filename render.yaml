@@ -1,0 +1,29 @@
+databases:
+  - name: ozlem-malzeme-formu-db
+    databaseName: ozlem_malzeme_formu
+    plan: free
+
+services:
+  - type: web
+    name: ozlem-malzeme-formu
+    runtime: node
+    plan: free
+    region: frankfurt
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ozlem-malzeme-formu-db
+          property: connectionString
+      # Siteye giriş şifresi - Render panelinden girilir
+      - key: SITE_PASSWORD
+        sync: false
+      # Gemini API anahtarı - Render panelinden girilir
+      - key: GEMINI_API_KEY
+        sync: false
+      # Oturum çerezini imzalamak için kullanılır, Render rastgele üretir
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: NODE_VERSION
+        value: "22"

@@ -1,21 +1,25 @@
+import { existsSync } from "fs";
 import { chromium } from "playwright-core";
 import { AUTH_COOKIE } from "@/lib/auth";
 
-const LOCAL_EXECUTABLE_PATH = "/opt/pw-browsers/chromium";
-const IS_SERVERLESS = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const LOCAL_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || "/opt/pw-browsers/chromium";
 
+/**
+ * Geliştirme ortamında hazır kurulu bir Chromium varsa o kullanılır.
+ * Render/Vercel gibi sunucularda böyle bir tarayıcı bulunmadığından
+ * @sparticuz/chromium paketiyle gelen tarayıcıya düşülür.
+ */
 async function launchBrowser() {
-  if (IS_SERVERLESS) {
-    // Vercel/AWS Lambda gibi sunucusuz ortamlarda önceden kurulu bir Chromium
-    // bulunmaz; @sparticuz/chromium isteğe bağlı bir bağımlılık olarak bunu sağlar.
-    const { default: sparticuzChromium } = await import("@sparticuz/chromium");
-    return chromium.launch({
-      args: sparticuzChromium.args,
-      executablePath: await sparticuzChromium.executablePath(),
-      headless: true,
-    });
+  if (existsSync(LOCAL_EXECUTABLE_PATH)) {
+    return chromium.launch({ executablePath: LOCAL_EXECUTABLE_PATH, headless: true });
   }
-  return chromium.launch({ executablePath: LOCAL_EXECUTABLE_PATH, headless: true });
+
+  const { default: sparticuzChromium } = await import("@sparticuz/chromium");
+  return chromium.launch({
+    args: sparticuzChromium.args,
+    executablePath: await sparticuzChromium.executablePath(),
+    headless: true,
+  });
 }
 
 async function withPage<T>(
