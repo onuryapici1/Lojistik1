@@ -10,7 +10,7 @@ const LOCAL_EXECUTABLE_PATH = process.env.CHROMIUM_EXECUTABLE_PATH || "/opt/pw-b
  * @sparticuz/chromium paketiyle gelen tarayıcıya düşülür.
  */
 async function launchBrowser() {
-  if (existsSync(LOCAL_EXECUTABLE_PATH)) {
+  if (existsSync(/*turbopackIgnore: true*/ LOCAL_EXECUTABLE_PATH)) {
     return chromium.launch({ executablePath: LOCAL_EXECUTABLE_PATH, headless: true });
   }
 
