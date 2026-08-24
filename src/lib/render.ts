@@ -1,7 +1,22 @@
 import { chromium } from "playwright-core";
 import { AUTH_COOKIE } from "@/lib/auth";
 
-const EXECUTABLE_PATH = "/opt/pw-browsers/chromium";
+const LOCAL_EXECUTABLE_PATH = "/opt/pw-browsers/chromium";
+const IS_SERVERLESS = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
+
+async function launchBrowser() {
+  if (IS_SERVERLESS) {
+    // Vercel/AWS Lambda gibi sunucusuz ortamlarda önceden kurulu bir Chromium
+    // bulunmaz; @sparticuz/chromium isteğe bağlı bir bağımlılık olarak bunu sağlar.
+    const { default: sparticuzChromium } = await import("@sparticuz/chromium");
+    return chromium.launch({
+      args: sparticuzChromium.args,
+      executablePath: await sparticuzChromium.executablePath(),
+      headless: true,
+    });
+  }
+  return chromium.launch({ executablePath: LOCAL_EXECUTABLE_PATH, headless: true });
+}
 
 async function withPage<T>(
   origin: string,
@@ -9,7 +24,7 @@ async function withPage<T>(
   authToken: string,
   fn: (page: import("playwright-core").Page) => Promise<T>
 ): Promise<T> {
-  const browser = await chromium.launch({ executablePath: EXECUTABLE_PATH, headless: true });
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext();
     const url = new URL(`/siparis/${id}/yazdir`, origin);
