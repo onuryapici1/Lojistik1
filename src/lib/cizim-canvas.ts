@@ -16,8 +16,15 @@ export function mmToPx(mm: number, dpi: number): number {
   return (mm * dpi) / 25.4;
 }
 
-/** Yazı tipi yığını — Türkçe karakterleri olan yaygın fontlar. */
-const YAZI_TIPI = '"Segoe UI", "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+/**
+ * Yazı tipi yığını.
+ *
+ * Noto Sans başta: PDF de onunla basılıyor ve satır kaydırma kararı onun
+ * ölçüleriyle veriliyor. Sistemde varsa (Android'de varsayılan) önizleme
+ * PDF'in birebir aynısı olur. Yoksa Segoe UI/Arial'a düşüyor — bunlar Noto
+ * Sans'tan biraz dar, yani metin kesinlikle sığar, sadece bir tık ferah durur.
+ */
+const YAZI_TIPI = '"Noto Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif';
 
 function yaziTipiKur(ctx: CanvasRenderingContext2D, komut: YaziKomutu, dpi: number) {
   // Milimetre cinsinden verdiğimiz "boyut" yazının büyük harf yüksekliği gibi

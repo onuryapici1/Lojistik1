@@ -8,6 +8,7 @@
  */
 
 import type { FormVerisi, FormSatiri, SayfaModu } from "./types";
+import { emGenisligi } from "./yaziGenislik";
 
 export const SAYFA_GENISLIK = 210;
 export const SAYFA_YUKSEKLIK = 297;
@@ -99,6 +100,81 @@ export const TABAN_SUTUN_BASLIK_YUKSEKLIK = 6.5;
 export const MIN_OLCEK = 50;
 export const MAX_OLCEK = 100;
 
+/**
+ * "boyut" (mm) değerini gerçek em yüksekliğine çeviren çarpan.
+ * Canvas ve pdf-lib ikisi de bunu kullanıyor; tek yerden gelmesi şart, yoksa
+ * yazılar iki çıktıda farklı boyutta çıkar.
+ */
+export const YAZI_EM_CARPANI = 1.42;
+
+/** Hücre içi yatay boşluk (metnin kenarlara yapışmaması için). */
+export const HUCRE_IC_BOSLUK = 1.2;
+
+/** Uzun malzeme adları en fazla bu kadar satıra bölünür. */
+export const EN_FAZLA_METIN_SATIRI = 2;
+
+/** Malzeme adı sütununda metne kalan gerçek genişlik. */
+export const MALZEME_METIN_GENISLIK = SUTUN_GENISLIK.malzemeAdi - HUCRE_IC_BOSLUK * 2;
+
+/**
+ * Metni sütuna sığacak şekilde en fazla EN_FAZLA_METIN_SATIRI satıra böler.
+ *
+ * Ölçüm yaziGenislik.ts'teki font tablosundan geliyor — canvas veya pdf-lib
+ * ölçümü kullansaydık kaydırma noktası iki çıktıda farklı olur, önizleme ile
+ * PDF ayrışırdı. Bölme burada bir kez yapılıp iki arka uca da aynı satırlar
+ * veriliyor.
+ */
+export function metniKaydir(
+  metin: string,
+  kullanilabilirMm: number,
+  boyutMm: number,
+  kalinMi = false,
+): string[] {
+  const emMm = boyutMm * YAZI_EM_CARPANI;
+  const olc = (s: string) => emGenisligi(s, kalinMi) * emMm;
+
+  const temiz = metin.trim();
+  if (!temiz) return [""];
+  if (olc(temiz) <= kullanilabilirMm) return [temiz];
+
+  const kelimeler = temiz.split(/\s+/);
+  const satirlar: string[] = [];
+  let mevcut = "";
+
+  for (const kelime of kelimeler) {
+    const aday = mevcut ? `${mevcut} ${kelime}` : kelime;
+    if (!mevcut || olc(aday) <= kullanilabilirMm) {
+      mevcut = aday;
+    } else if (satirlar.length < EN_FAZLA_METIN_SATIRI - 1) {
+      satirlar.push(mevcut);
+      mevcut = kelime;
+    } else {
+      // Son satırdayız; kalanı ekle, çizim katmanı gerekirse kısaltır.
+      mevcut = aday;
+    }
+  }
+  satirlar.push(mevcut);
+  return satirlar;
+}
+
+/** Bir satırın kaç birim (temel satır yüksekliği) yer kapladığı. */
+export function satirBirimi(satir: FormSatiri, olcek: number): number {
+  const satirlar = metniKaydir(
+    satir.malzemeAdi,
+    MALZEME_METIN_GENISLIK,
+    yaziBoyutu(olcek),
+    satir.tur === "baslik",
+  );
+  return Math.min(EN_FAZLA_METIN_SATIRI, satirlar.length);
+}
+
+/** Bütün satırların toplam birim maliyeti. */
+export function toplamBirim(satirlar: FormSatiri[], olcek: number): number {
+  let t = 0;
+  for (const s of satirlar) t += satirBirimi(s, olcek);
+  return t;
+}
+
 export function olcekSinirla(olcek: number): number {
   if (!Number.isFinite(olcek)) return MAX_OLCEK;
   return Math.min(MAX_OLCEK, Math.max(MIN_OLCEK, Math.round(olcek)));
@@ -136,61 +212,94 @@ export function sayfaKapasitesi(olcek: number, ilkSayfa: boolean, notVar: boolea
   return blokSatirSayisi(olcek, ilkSayfa, notVar) * 2;
 }
 
-/** Verilen ölçekte kaç A4 sayfa tuttuğunu hesaplar. */
-export function sayfaSayisi(satirSayisi: number, olcek: number, notVar: boolean): number {
-  if (satirSayisi <= 0) return 1;
-  let kalan = satirSayisi;
+/**
+ * Verilen ölçekte kaç A4 sayfa tuttuğunu hesaplar.
+ *
+ * Satırlar artık farklı yükseklikte olabildiği için (uzun malzeme adları iki
+ * satıra kayıyor) blokları gerçekten doldurarak sayıyoruz; basit bir bölme
+ * işlemi yanlış sonuç verirdi.
+ */
+export function sayfaSayisi(satirlar: FormSatiri[], olcek: number, notVar: boolean): number {
+  if (satirlar.length === 0) return 1;
+  const birimler = satirlar.map((s) => satirBirimi(s, olcek));
+
+  let i = 0;
   let sayfa = 0;
-  while (kalan > 0) {
-    kalan -= sayfaKapasitesi(olcek, sayfa === 0, notVar);
+  while (i < birimler.length && sayfa <= 200) {
+    const kapasite = blokSatirSayisi(olcek, sayfa === 0, notVar);
+    // Sayfada iki blok var; her birini sırayla doldur.
+    for (let blok = 0; blok < 2 && i < birimler.length; blok++) {
+      let kullanilan = 0;
+      while (i < birimler.length) {
+        const birim = birimler[i];
+        // Blok tamamen boşsa sığmasa bile yerleştir; yoksa sonsuz döngü olur.
+        if (kullanilan > 0 && kullanilan + birim > kapasite) break;
+        kullanilan += birim;
+        i += 1;
+        if (kullanilan >= kapasite) break;
+      }
+    }
     sayfa += 1;
-    if (sayfa > 200) break; // güvenlik sınırı
   }
-  return sayfa;
+  return Math.max(1, sayfa);
 }
 
 /**
  * Hedef sayfa sayısına sığan **en büyük** (yani en okunaklı) ölçeği bulur.
  * Hiçbir ölçekte sığmıyorsa MIN_OLCEK döner.
  */
-export function hedefeSigdir(satirSayisi: number, hedefSayfa: number, notVar: boolean): number {
+export function hedefeSigdir(
+  satirlar: FormSatiri[],
+  hedefSayfa: number,
+  notVar: boolean,
+): number {
   const hedef = Math.max(1, Math.floor(hedefSayfa));
   for (let olcek = MAX_OLCEK; olcek >= MIN_OLCEK; olcek--) {
-    if (sayfaSayisi(satirSayisi, olcek, notVar) <= hedef) return olcek;
+    if (sayfaSayisi(satirlar, olcek, notVar) <= hedef) return olcek;
   }
   return MIN_OLCEK;
 }
 
 /** Seçilen moda göre gerçekte uygulanacak ölçeği verir. */
 export function olcekCoz(
-  satirSayisi: number,
+  satirlar: FormSatiri[],
   mod: SayfaModu,
   hedefSayfa: number,
   elleOlcek: number,
   notVar: boolean,
 ): number {
-  if (mod === "tekSayfa") return hedefeSigdir(satirSayisi, 1, notVar);
-  if (mod === "bol") return hedefeSigdir(satirSayisi, hedefSayfa, notVar);
+  if (mod === "tekSayfa") return hedefeSigdir(satirlar, 1, notVar);
+  if (mod === "bol") return hedefeSigdir(satirlar, hedefSayfa, notVar);
   return olcekSinirla(elleOlcek);
 }
 
-/** Yerleşimde tek bir hücre: satır verisi + formdaki global sıra numarası. */
+/** Yerleşimde tek bir hücre. */
 export interface YerlesimSatiri {
   satir: FormSatiri;
+  /** Formdaki sıra numarası (1'den başlar, her madde bir numara alır). */
   sira: number;
+  /** Kapladığı birim sayısı: kısa adlar 1, iki satıra kayanlar 2. */
+  birim: number;
+  /** Bloğun üstünden itibaren kaç birim aşağıda başladığı. */
+  ofset: number;
+  /** Malzeme adının kaydırılmış hâli; çizim bunu olduğu gibi basar. */
+  metinSatirlari: string[];
+}
+
+export interface YerlesimBlogu {
+  hucreler: YerlesimSatiri[];
+  /** Blokta toplam kaç birimlik yer var. */
+  kapasite: number;
+  /** Dolu hücrelerin kapladığı birim; kalanı boş satır olarak çizilir. */
+  kullanilan: number;
+  /** İlk boş satırın sıra numarası. */
+  bosBaslangic: number;
 }
 
 export interface YerlesimSayfasi {
   ilkSayfa: boolean;
-  /** Her zaman iki eleman: [sol blok, sağ blok]. Bloklar eksik satırla dolmaz. */
-  bloklar: [YerlesimSatiri[], YerlesimSatiri[]];
-  /** Bloğun kaç satırlık yer kapladığı — boş satırlar da çizilsin diye. */
-  blokSatirSayisi: number;
-  /**
-   * Her bloğun ilk satırının global sıra numarası (1'den başlar).
-   * Veri bitse bile boş satırlara numara yazabilmek için gerekiyor.
-   */
-  blokBaslangic: [number, number];
+  /** Her zaman iki eleman: [sol blok, sağ blok]. */
+  bloklar: [YerlesimBlogu, YerlesimBlogu];
 }
 
 export interface Yerlesim {
@@ -234,38 +343,54 @@ export function sayfala(form: FormVerisi, secenekler: YerlesimSecenekleri = {}):
     satirlar = satirlar.slice(0, son);
   }
 
-  const olcek = olcekCoz(satirlar.length, form.sayfaModu, form.hedefSayfa, form.olcek, notVar);
+  const olcek = olcekCoz(satirlar, form.sayfaModu, form.hedefSayfa, form.olcek, notVar);
+  const boyut = yaziBoyutu(olcek);
 
   const sayfalar: YerlesimSayfasi[] = [];
   let i = 0;
   let sayfaIndex = 0;
-  /** Kaç satırlık yer harcandığı — dolu olsun olmasın. Numaralandırma buna göre. */
-  let harcananSlot = 0;
+  /** Kaçıncı maddedeyiz — boş satırlar da numara aldığı için sürekli artıyor. */
+  let siraSayaci = 0;
+
+  /** Bir bloğu kapasitesi dolana kadar doldurur. */
+  function blokDoldur(kapasite: number): YerlesimBlogu {
+    const hucreler: YerlesimSatiri[] = [];
+    let kullanilan = 0;
+
+    while (i < satirlar.length) {
+      const satir = satirlar[i];
+      const metinSatirlari = metniKaydir(
+        satir.malzemeAdi,
+        MALZEME_METIN_GENISLIK,
+        boyut,
+        satir.tur === "baslik",
+      );
+      const birim = Math.min(EN_FAZLA_METIN_SATIRI, metinSatirlari.length);
+
+      // Blok tamamen boşsa sığmasa bile yerleştir; yoksa iki satırlık bir ad
+      // tek birimlik bir bloğa hiç giremez ve sonsuz döngü olur.
+      if (kullanilan > 0 && kullanilan + birim > kapasite) break;
+
+      siraSayaci += 1;
+      hucreler.push({ satir, sira: siraSayaci, birim, ofset: kullanilan, metinSatirlari });
+      kullanilan += birim;
+      i += 1;
+      if (kullanilan >= kapasite) break;
+    }
+
+    const bosBaslangic = siraSayaci + 1;
+    // Kalan boş satırlar da numara alıyor (kağıda basıp elle doldurmak için).
+    siraSayaci += Math.max(0, kapasite - kullanilan);
+
+    return { hucreler, kapasite, kullanilan, bosBaslangic };
+  }
 
   do {
     const ilkSayfa = sayfaIndex === 0;
-    const blokBoyu = blokSatirSayisi(olcek, ilkSayfa, notVar);
-
-    const solBaslangic = harcananSlot + 1;
-    const sol: YerlesimSatiri[] = [];
-    for (let k = 0; k < blokBoyu && i < satirlar.length; k++, i++) {
-      sol.push({ satir: satirlar[i], sira: solBaslangic + k });
-    }
-    harcananSlot += blokBoyu;
-
-    const sagBaslangic = harcananSlot + 1;
-    const sag: YerlesimSatiri[] = [];
-    for (let k = 0; k < blokBoyu && i < satirlar.length; k++, i++) {
-      sag.push({ satir: satirlar[i], sira: sagBaslangic + k });
-    }
-    harcananSlot += blokBoyu;
-
-    sayfalar.push({
-      ilkSayfa,
-      bloklar: [sol, sag],
-      blokSatirSayisi: blokBoyu,
-      blokBaslangic: [solBaslangic, sagBaslangic],
-    });
+    const kapasite = blokSatirSayisi(olcek, ilkSayfa, notVar);
+    const sol = blokDoldur(kapasite);
+    const sag = blokDoldur(kapasite);
+    sayfalar.push({ ilkSayfa, bloklar: [sol, sag] });
     sayfaIndex += 1;
   } while (i < satirlar.length && sayfaIndex <= 200);
 
@@ -288,12 +413,12 @@ export function ozet(form: FormVerisi, notVar = true) {
   const doluSatir = form.satirlar.filter(
     (s) => s.malzemeAdi.trim() || s.miktar.trim() || s.stokDurumu.trim(),
   ).length;
-  const olcek = olcekCoz(form.satirlar.length, form.sayfaModu, form.hedefSayfa, form.olcek, notVar);
+  const olcek = olcekCoz(form.satirlar, form.sayfaModu, form.hedefSayfa, form.olcek, notVar);
   return {
     olcek,
-    sayfaSayisi: sayfaSayisi(form.satirlar.length, olcek, notVar),
+    sayfaSayisi: sayfaSayisi(form.satirlar, olcek, notVar),
     toplamSatir: form.satirlar.length,
     doluSatir,
-    tekSayfayaSigarMi: hedefeSigdir(form.satirlar.length, 1, notVar) > MIN_OLCEK,
+    tekSayfayaSigarMi: hedefeSigdir(form.satirlar, 1, notVar) > MIN_OLCEK,
   };
 }

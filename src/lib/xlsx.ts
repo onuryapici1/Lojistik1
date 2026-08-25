@@ -62,42 +62,56 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
   let satirNo = 1;
 
   /**
-   * Bir bloğun tek satırını yazar.
+   * Bir bloğun tek mantıksal satırını yazar.
    *
    * Sol blokta "Sıra" sütunu var, sağ blokta yok (şablon böyle). Grup başlığı
-   * satırlarında (ör. "ET GRUBU") malzeme+miktar+stok hücreleri birleştirilip
-   * kalın kırmızı tek hücre olarak basılır.
+   * satırlarında (ör. "ET GRUBU") malzeme+miktar+stok hücreleri yatay
+   * birleştirilip kalın kırmızı tek hücre olarak basılır.
+   *
+   * Uzun malzeme adları PDF'te iki satıra kaydığı için burada da iki Excel
+   * satırı kaplıyor: hücreler dikey birleştirilip metin kaydırma açılıyor.
+   * Böylece iki çıktı aynı hizada kalıyor.
    *
    * @param ilkKolon Bloğun ilk Excel kolonu (sol=1, sağ=5).
    * @param siraNo Sol blokta yazılacak sıra numarası; sağ blokta null.
+   * @param birim Kaç Excel satırı kaplayacağı (1 veya 2).
    */
   function blokSatirYaz(
-    satir: ExcelJS.Row,
+    ustSatirNo: number,
     ilkKolon: number,
     siraNo: number | null,
     veri: { tur: string; malzemeAdi: string; miktar: string; stokDurumu: string } | undefined,
+    birim = 1,
   ) {
+    const altSatirNo = ustSatirNo + birim - 1;
+    const satir = sayfa.getRow(ustSatirNo);
+
+    /** Hücreyi (gerekiyorsa dikey birleştirerek) hazırlar. */
+    const hucreAl = (kolon: number) => {
+      if (birim > 1) sayfa.mergeCells(ustSatirNo, kolon, altSatirNo, kolon);
+      const h = satir.getCell(kolon);
+      h.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
+      return h;
+    };
+
     // Sol blokta ilk kolon "Sıra"; veri kolonları ondan sonra başlar.
     let veriIlkKolon = ilkKolon;
     if (siraNo !== null) {
-      const siraHucre = satir.getCell(ilkKolon);
+      const siraHucre = hucreAl(ilkKolon);
       siraHucre.value = siraNo;
       siraHucre.font = { name: "Arial", size: 9, color: { argb: "FF9CA3AF" } };
       siraHucre.alignment = { horizontal: "center", vertical: "middle" };
-      siraHucre.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
       veriIlkKolon = ilkKolon + 1;
     }
 
     if (veri?.tur === "baslik") {
-      sayfa.mergeCells(satir.number, veriIlkKolon, satir.number, veriIlkKolon + 2);
-      for (let k = 0; k < 3; k++) {
-        const hucre = satir.getCell(veriIlkKolon + k);
-        hucre.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
-      }
+      // Başlık: üç veri sütunu yatay birleşir (birim>1 ise dikeyde de).
+      sayfa.mergeCells(ustSatirNo, veriIlkKolon, altSatirNo, veriIlkKolon + 2);
       const metinHucre = satir.getCell(veriIlkKolon);
+      metinHucre.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
       metinHucre.value = veri.malzemeAdi || null;
       metinHucre.font = { name: "Arial", size: 9, bold: true, color: { argb: KIRMIZI } };
-      metinHucre.alignment = { horizontal: "left", vertical: "middle" };
+      metinHucre.alignment = { horizontal: "left", vertical: "middle", wrapText: birim > 1 };
       return;
     }
 
@@ -107,11 +121,15 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
       veri?.stokDurumu || null,
     ];
     degerler.forEach((deger, k) => {
-      const hucre = satir.getCell(veriIlkKolon + k);
+      const hucre = hucreAl(veriIlkKolon + k);
       hucre.value = deger;
       hucre.font = { name: "Arial", size: 9 };
-      hucre.alignment = { horizontal: k === 0 ? "left" : "center", vertical: "middle" };
-      hucre.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
+      hucre.alignment = {
+        horizontal: k === 0 ? "left" : "center",
+        vertical: "middle",
+        // Yalnızca malzeme adı kayabiliyor.
+        wrapText: k === 0 && birim > 1,
+      };
     });
   }
 
@@ -136,19 +154,13 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
     }
 
     if (sayfaYerlesimi.ilkSayfa) {
-      // Başlık: orijinal şablonla birebir aynı — "MALZEME SİPARİŞ FORMU" yalnızca
-      // sol blok (A-D), "TESLİM TARİHİ" yalnızca sağ blok (E-G) genişliğinde.
-      sayfa.mergeCells(satirNo, 1, satirNo, 4);
+      // Başlık tek parça, tam genişlikte. Şablondaki ikinci "TESLİM TARİHİ"
+      // başlığı kaldırıldı; tarih zaten hemen alttaki kutuda yazıyor.
+      sayfa.mergeCells(satirNo, 1, satirNo, SON_KOLON);
       const baslikHucre = sayfa.getCell(satirNo, 1);
       baslikHucre.value = "MALZEME SİPARİŞ FORMU";
       baslikHucre.font = { name: "Arial", size: 14, bold: true };
       baslikHucre.alignment = { horizontal: "center", vertical: "middle" };
-
-      sayfa.mergeCells(satirNo, SAG_BLOK_ILK_KOLON, satirNo, SON_KOLON);
-      const teslimBaslikHucre = sayfa.getCell(satirNo, SAG_BLOK_ILK_KOLON);
-      teslimBaslikHucre.value = "TESLİM TARİHİ";
-      teslimBaslikHucre.font = { name: "Arial", size: 14, bold: true };
-      teslimBaslikHucre.alignment = { horizontal: "center", vertical: "middle" };
 
       sayfa.getRow(satirNo).height = 24;
       satirNo += 1;
@@ -190,16 +202,41 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
     baslikSatiriYaz();
 
     const [sol, sag] = sayfaYerlesimi.bloklar;
-    const adet = sayfaYerlesimi.blokSatirSayisi;
+    const adet = sol.kapasite;
 
-    for (let i = 0; i < adet; i++) {
-      const satir = sayfa.getRow(satirNo);
-      blokSatirYaz(satir, 1, sayfaYerlesimi.blokBaslangic[0] + i, sol[i]?.satir);
-      // Sağ blokta sıra sütunu yok (şablon böyle), o yüzden numara geçmiyoruz.
-      blokSatirYaz(satir, SAG_BLOK_ILK_KOLON, null, sag[i]?.satir);
-      satir.height = 15;
-      satirNo += 1;
+    // Her Excel satırı bir "birim"e karşılık geliyor; iki birimlik hücreler
+    // blokSatirYaz içinde dikey birleştiriliyor. Bu yüzden hangi hücrenin
+    // hangi birimde başladığını haritalıyoruz.
+    const harita = (blok: typeof sol) =>
+      new Map(blok.hucreler.map((h) => [h.ofset, h]));
+    const solHarita = harita(sol);
+    const sagHarita = harita(sag);
+
+    const ilkSatirNo = satirNo;
+    for (let o = 0; o < adet; o++) {
+      const mevcutSatirNo = ilkSatirNo + o;
+
+      const solHucre = solHarita.get(o);
+      if (solHucre) {
+        blokSatirYaz(mevcutSatirNo, 1, solHucre.sira, solHucre.satir, solHucre.birim);
+      } else if (o >= sol.kullanilan) {
+        // Boş satır: yalnızca sıra numarası.
+        blokSatirYaz(mevcutSatirNo, 1, sol.bosBaslangic + (o - sol.kullanilan), undefined, 1);
+      }
+      // o < kullanilan ve harita boş ise: üstteki iki birimlik hücrenin
+      // devamıyız, hücre zaten birleştirildi.
+
+      const sagHucre = sagHarita.get(o);
+      if (sagHucre) {
+        // Sağ blokta sıra sütunu yok (şablon böyle), numara geçmiyoruz.
+        blokSatirYaz(mevcutSatirNo, SAG_BLOK_ILK_KOLON, null, sagHucre.satir, sagHucre.birim);
+      } else if (o >= sag.kullanilan) {
+        blokSatirYaz(mevcutSatirNo, SAG_BLOK_ILK_KOLON, null, undefined, 1);
+      }
+
+      sayfa.getRow(mevcutSatirNo).height = 15;
     }
+    satirNo = ilkSatirNo + adet;
   });
 
   // Kullanım notu

@@ -222,8 +222,9 @@ function blokCiz(
   const solMu = blokIndex === 0;
   const blokGenislik = solMu ? SOL_BLOK_GENISLIK : SAG_BLOK_GENISLIK;
   const sutunlar = sutunKonumlari(blokX, solMu ? SOL_SUTUNLAR : SAG_SUTUNLAR);
-  const hucreler = sayfa.bloklar[blokIndex];
-  const satirAdedi = sayfa.blokSatirSayisi;
+  const blok = sayfa.bloklar[blokIndex];
+  const hucreler = blok.hucreler;
+  const satirAdedi = blok.kapasite;
 
   // Başlık şeridi
   komutlar.push({
@@ -254,27 +255,36 @@ function blokCiz(
   const govdeY = tabloY + sutunBaslikYuksekligi;
   const govdeYukseklik = satirAdedi * satirYuksekligi;
 
+  // Satır sınırları: dolu hücreler kendi birimleri kadar, kalanlar birer birim.
+  // Sabit adımla çizemiyoruz çünkü iki satıra kayan adlar iki birim kaplıyor.
+  const sinirlar: { ofset: number; birim: number }[] = [
+    ...hucreler.map((h) => ({ ofset: h.ofset, birim: h.birim })),
+  ];
+  for (let o = blok.kullanilan; o < satirAdedi; o++) {
+    sinirlar.push({ ofset: o, birim: 1 });
+  }
+
   // Satır zeminleri (bir dolu bir boş; okumayı kolaylaştırıyor)
-  for (let i = 0; i < satirAdedi; i++) {
+  sinirlar.forEach((sinir, i) => {
     if (i % 2 === 1) {
       komutlar.push({
         tur: "kutu",
         x: blokX,
-        y: govdeY + i * satirYuksekligi,
+        y: govdeY + sinir.ofset * satirYuksekligi,
         genislik: blokGenislik,
-        yukseklik: satirYuksekligi,
+        yukseklik: sinir.birim * satirYuksekligi,
         dolgu: RENK.seritZemin,
       });
     }
-  }
+  });
 
-  // Yatay çizgiler
-  for (let i = 1; i < satirAdedi; i++) {
-    const y = govdeY + i * satirYuksekligi;
+  // Yatay çizgiler (her satırın üst kenarı; ilki dış çerçeveyle çakışır)
+  for (const sinir of sinirlar) {
+    if (sinir.ofset === 0) continue;
     komutlar.push({
       tur: "kutu",
       x: blokX,
-      y,
+      y: govdeY + sinir.ofset * satirYuksekligi,
       genislik: blokGenislik,
       yukseklik: 0,
       cerceve: RENK.cizgi,
@@ -307,46 +317,66 @@ function blokCiz(
   });
 
   // İçerik
-  hucreler.forEach((h, i) => {
-    const satirY = govdeY + i * satirYuksekligi;
+  for (const h of hucreler) {
+    const satirY = govdeY + h.ofset * satirYuksekligi;
+    const satirYukseklik = h.birim * satirYuksekligi;
     const baslikMi = h.satir.tur === "baslik";
-    const degerler: Record<string, string> = {
-      sira: String(h.sira),
-      malzemeAdi: h.satir.malzemeAdi,
-      // Başlık satırında miktar/stok zaten boş geliyor (bosBaslik + formuDogrula
-      // bunu garanti ediyor) ama görsel olarak da bilerek boş bırakıyoruz.
-      miktar: baslikMi ? "" : h.satir.miktar,
-      stokDurumu: baslikMi ? "" : h.satir.stokDurumu,
-    };
+
     for (const s of sutunlar) {
-      const deger = degerler[s.anahtar];
+      if (s.anahtar === "malzemeAdi") {
+        // Kaydırılmış satırlar tek tek basılıyor; hepsi birlikte hücrede dikey
+        // ortalanıyor ki tek satırlık adlar da iki satırlıklar da hizalı dursun.
+        const toplamYukseklik = h.metinSatirlari.length * satirYuksekligi;
+        h.metinSatirlari.forEach((metin, k) => {
+          if (!metin) return;
+          komutlar.push(
+            hucreYazisi(
+              metin,
+              s,
+              satirY + (satirYukseklik - toplamYukseklik) / 2 + k * satirYuksekligi,
+              satirYuksekligi,
+              yaziBoyutu,
+              baslikMi,
+              baslikMi ? RENK.grupBasligi : RENK.metin,
+            ),
+          );
+        });
+        continue;
+      }
+
+      const deger =
+        s.anahtar === "sira"
+          ? String(h.sira)
+          : baslikMi
+            ? "" // Başlık satırında miktar/stok bilerek boş
+            : s.anahtar === "miktar"
+              ? h.satir.miktar
+              : h.satir.stokDurumu;
       if (!deger) continue;
-      const malzemeSutunu = s.anahtar === "malzemeAdi";
+
       komutlar.push(
         hucreYazisi(
           deger,
           s,
           satirY,
-          satirYuksekligi,
+          satirYukseklik,
           yaziBoyutu,
-          s.anahtar === "sira" ? false : baslikMi && malzemeSutunu,
-          s.anahtar === "sira" ? RENK.soluk : baslikMi && malzemeSutunu ? RENK.grupBasligi : RENK.metin,
+          false,
+          s.anahtar === "sira" ? RENK.soluk : RENK.metin,
         ),
       );
     }
-  });
+  }
 
   // Dolu satırların ötesindeki boş satırlara da sıra numarası yaz (elle doldurmak
   // için). Sağ blokta "Sıra" sütunu yok — şablonda da yok — o yüzden atlanıyor.
   if (solMu) {
-    const baslangic = sayfa.blokBaslangic[blokIndex];
-    for (let i = hucreler.length; i < satirAdedi; i++) {
-      const satirY = govdeY + i * satirYuksekligi;
+    for (let o = blok.kullanilan; o < satirAdedi; o++) {
       komutlar.push(
         hucreYazisi(
-          String(baslangic + i),
+          String(blok.bosBaslangic + (o - blok.kullanilan)),
           sutunlar[0],
-          satirY,
+          govdeY + o * satirYuksekligi,
           satirYuksekligi,
           yaziBoyutu,
           false,
@@ -366,46 +396,27 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
     let y = KENAR_BOSLUK;
 
     if (sayfa.ilkSayfa) {
-      // Başlık satırı: orijinal Excel şablonuyla birebir aynı — "MALZEME SİPARİŞ
-      // FORMU" yalnızca sol blok genişliğinde, "TESLİM TARİHİ" sağ blok genişliğinde
-      // ikinci bir bölüm başlığı olarak (A1:D1 / E1:G1 birleştirilmiş hücreleri).
+      // Başlık satırı: tek bir "MALZEME SİPARİŞ FORMU" başlığı, sayfanın tam
+      // genişliğinde. Şablonda sağ blokta ikinci bir "TESLİM TARİHİ" başlığı
+      // daha vardı ama tarih zaten hemen altındaki kutuda yazdığı için
+      // gereksiz tekrardı; kaldırıldı.
       const solBlokX = KENAR_BOSLUK;
       const sagBlokX = KENAR_BOSLUK + SOL_BLOK_GENISLIK;
 
-      // Başlık satırı da çerçeveli (şablonda A1:D1 ve E1:G1 kenarlıklı hücreler).
       komutlar.push({
         tur: "kutu",
         x: solBlokX,
         y,
-        genislik: SOL_BLOK_GENISLIK,
-        yukseklik: BASLIK_YUKSEKLIK,
-        cerceve: RENK.kalinCizgi,
-        kalinlik: KALIN,
-      });
-      komutlar.push({
-        tur: "kutu",
-        x: sagBlokX,
-        y,
-        genislik: SAG_BLOK_GENISLIK,
+        genislik: ICERIK_GENISLIK,
         yukseklik: BASLIK_YUKSEKLIK,
         cerceve: RENK.kalinCizgi,
         kalinlik: KALIN,
       });
       komutlar.push({
         tur: "yazi",
-        x: solBlokX + SOL_BLOK_GENISLIK / 2,
+        x: solBlokX + ICERIK_GENISLIK / 2,
         y: y + BASLIK_YUKSEKLIK * 0.68,
         metin: "MALZEME SİPARİŞ FORMU",
-        boyut: 4.6,
-        hiza: "orta",
-        kalin: true,
-        renk: RENK.metin,
-      });
-      komutlar.push({
-        tur: "yazi",
-        x: sagBlokX + SAG_BLOK_GENISLIK / 2,
-        y: y + BASLIK_YUKSEKLIK * 0.68,
-        metin: "TESLİM TARİHİ",
         boyut: 4.6,
         hiza: "orta",
         kalin: true,
