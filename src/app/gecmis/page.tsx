@@ -1,24 +1,29 @@
-import { listOrders } from "@/lib/orders";
-import { OrderHistoryList } from "@/components/OrderHistoryList";
-import { TopBar } from "@/components/TopBar";
+import Link from "next/link";
+import { formlariListele } from "@/lib/depo";
+import { GecmisListesi } from "@/components/GecmisListesi";
 
 export const dynamic = "force-dynamic";
 
-export default async function GecmisPage() {
-  const orders = await listOrders();
+export default async function GecmisSayfasi() {
+  const formlar = await formlariListele();
 
   return (
-    <>
-      <TopBar title="Geçmiş Siparişler" />
-      <main className="max-w-4xl mx-auto w-full px-4 py-6 space-y-4">
-        <h1 className="text-xl font-bold text-slate-800">Geçmiş Siparişler</h1>
-        <OrderHistoryList
-          orders={orders.map((o) => ({
-            ...o,
-            updatedAt: o.updatedAt.toISOString(),
-          }))}
-        />
+    <div className="min-h-dvh">
+      <header className="sticky top-0 z-10 bg-white/95 backdrop-blur border-b border-slate-200">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 h-14 flex items-center gap-2">
+          <h1 className="font-bold text-slate-900">Geçmiş formlar</h1>
+          <Link
+            href="/"
+            className="ml-auto rounded-lg bg-blue-600 text-white px-4 py-2 text-sm font-medium hover:bg-blue-700"
+          >
+            Yeni form
+          </Link>
+        </div>
+      </header>
+
+      <main className="max-w-3xl mx-auto px-3 sm:px-4 py-4">
+        <GecmisListesi formlar={formlar} />
       </main>
-    </>
+    </div>
   );
 }

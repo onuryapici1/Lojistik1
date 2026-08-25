@@ -1,29 +1,23 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Özlem Malzeme Formu",
-  description: "Şubeler için malzeme sipariş formu - doldur, Excel/PDF/PNG olarak indir.",
+  description: "Şube malzeme sipariş formu — Excel, PDF ve PNG çıktısı",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Kullanıcı yakınlaştırabilsin; erişilebilirlik için kapatmıyoruz.
+  maximumScale: 5,
+  themeColor: "#2563eb",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html
-      lang="tr"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col bg-slate-50">{children}</body>
+    <html lang="tr">
+      <body className="min-h-dvh antialiased">{children}</body>
     </html>
   );
 }

@@ -1,63 +1,99 @@
-// Edge runtime uyumlu olması için Node 'crypto' modülü yerine Web Crypto (SubtleCrypto) kullanılır.
+/**
+ * Tek şifreli basit giriş.
+ *
+ * Kullanıcı adı yok: siteye girmek için tek bir SITE_PASSWORD var. Doğru şifre
+ * girilince AUTH_SECRET ile imzalanmış bir çerez yazılır. İmza Web Crypto ile
+ * yapılır, böylece hem Node hem de proxy (edge) çalışma ortamında çalışır.
+ */
 
-export const AUTH_COOKIE = "ozlem_auth";
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 gün
+export const OTURUM_COOKIE = "ozlem_oturum";
 
-function toHex(buffer: ArrayBuffer) {
-  return Array.from(new Uint8Array(buffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+/** Oturum süresi: 30 gün. */
+export const OTURUM_SURESI_SN = 60 * 60 * 24 * 30;
+
+function metniBayta(s: string): Uint8Array<ArrayBuffer> {
+  // TextEncoder ArrayBufferLike döndürüyor; Web Crypto ise kesin ArrayBuffer istiyor.
+  return new TextEncoder().encode(s) as Uint8Array<ArrayBuffer>;
 }
 
-async function importSecretKey(secret: string) {
-  return crypto.subtle.importKey(
+function baytiBase64Url(bayt: ArrayBuffer): string {
+  const bytes = new Uint8Array(bayt);
+  let ikili = "";
+  for (const b of bytes) ikili += String.fromCharCode(b);
+  return btoa(ikili).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function gizliAnahtar(): string {
+  const s = process.env.AUTH_SECRET;
+  if (!s) {
+    throw new Error("AUTH_SECRET tanımlı değil. Vercel > Settings > Environment Variables'a ekleyin.");
+  }
+  return s;
+}
+
+async function imzala(veri: string): Promise<string> {
+  const anahtar = await crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(secret),
+    metniBayta(gizliAnahtar()),
     { name: "HMAC", hash: "SHA-256" },
     false,
-    ["sign"]
+    ["sign"],
   );
+  const imza = await crypto.subtle.sign("HMAC", anahtar, metniBayta(veri));
+  return baytiBase64Url(imza);
 }
 
-async function sign(value: string): Promise<string> {
-  const secret = process.env.AUTH_SECRET;
-  if (!secret) throw new Error("AUTH_SECRET tanımlı değil");
-  const key = await importSecretKey(secret);
-  const signature = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value));
-  return toHex(signature);
-}
-
-function timingSafeEqualString(a: string, b: string): boolean {
+/** Zamanlama saldırısına kapalı karşılaştırma. */
+function esitMi(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
-  let result = 0;
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  let fark = 0;
+  for (let i = 0; i < a.length; i++) fark |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return fark === 0;
+}
+
+/** Girilen şifre doğru mu? */
+export function sifreDogruMu(girilen: string): boolean {
+  const dogru = process.env.SITE_PASSWORD;
+  if (!dogru) {
+    throw new Error("SITE_PASSWORD tanımlı değil. Vercel > Settings > Environment Variables'a ekleyin.");
   }
-  return result === 0;
+  return esitMi(girilen, dogru);
 }
 
-export async function createAuthToken(): Promise<string> {
-  const issuedAt = Date.now().toString();
-  const signature = await sign(issuedAt);
-  return `${issuedAt}.${signature}`;
+/** Çerezde saklanacak, süresi dolan imzalı jeton üretir. */
+export function jetonUret(): Promise<string> {
+  const sonGecerlilik = Date.now() + OTURUM_SURESI_SN * 1000;
+  const govde = String(sonGecerlilik);
+  return imzala(govde).then((imza) => `${govde}.${imza}`);
 }
 
-export async function verifyAuthToken(token: string | undefined | null): Promise<boolean> {
-  if (!token) return false;
-  const [issuedAt, signature] = token.split(".");
-  if (!issuedAt || !signature) return false;
+/** Jeton geçerli ve süresi dolmamış mı? */
+export async function jetonGecerliMi(jeton: string | undefined): Promise<boolean> {
+  if (!jeton) return false;
+  const ayirac = jeton.lastIndexOf(".");
+  if (ayirac <= 0) return false;
 
-  const expected = await sign(issuedAt);
-  if (!timingSafeEqualString(signature, expected)) return false;
+  const govde = jeton.slice(0, ayirac);
+  const imza = jeton.slice(ayirac + 1);
 
-  const age = (Date.now() - Number(issuedAt)) / 1000;
-  return age >= 0 && age <= MAX_AGE_SECONDS;
+  const sonGecerlilik = Number(govde);
+  if (!Number.isFinite(sonGecerlilik) || sonGecerlilik < Date.now()) return false;
+
+  try {
+    return esitMi(await imzala(govde), imza);
+  } catch {
+    // AUTH_SECRET yoksa imza atılamaz; girişi reddet.
+    return false;
+  }
 }
 
-export function checkPassword(password: string): boolean {
-  const expected = process.env.SITE_PASSWORD;
-  if (!expected) throw new Error("SITE_PASSWORD tanımlı değil");
-  return timingSafeEqualString(password, expected);
+/** Set-Cookie başlığı için ortak ayarlar. */
+export function cerezAyarlari(sil = false) {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: sil ? 0 : OTURUM_SURESI_SN,
+  };
 }
-
-export const AUTH_COOKIE_MAX_AGE = MAX_AGE_SECONDS;

@@ -1,10 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["playwright-core", "@sparticuz/chromium"],
+  // PDF üretimi Noto Sans dosyalarını çalışma anında diskten okuyor; Vercel'in
+  // dosya izleyicisi bunları tek başına bulamadığı için elle belirtiyoruz.
   outputFileTracingIncludes: {
-    "/api/orders/[id]/export/pdf": ["./node_modules/@sparticuz/chromium/**"],
-    "/api/orders/[id]/export/png": ["./node_modules/@sparticuz/chromium/**"],
+    "/api/cikti/pdf": ["./src/assets/fonts/**"],
   },
 };
 

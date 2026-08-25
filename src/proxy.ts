@@ -1,30 +1,36 @@
-import { NextRequest, NextResponse } from "next/server";
-import { AUTH_COOKIE, verifyAuthToken } from "@/lib/auth";
+import { NextResponse, type NextRequest } from "next/server";
+import { OTURUM_COOKIE, jetonGecerliMi } from "@/lib/auth";
 
-const PUBLIC_PATHS = ["/login", "/api/login"];
+/**
+ * Giriş yapmamış kullanıcıyı /giris sayfasına yollar.
+ * API isteklerinde yönlendirme yerine 401 döner ki istemci tarafı anlasın.
+ */
+
+const ACIK_YOLLAR = ["/giris", "/api/giris"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (
-    PUBLIC_PATHS.some((p) => pathname === p) ||
+    ACIK_YOLLAR.includes(pathname) ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon")
   ) {
     return NextResponse.next();
   }
 
-  const token = request.cookies.get(AUTH_COOKIE)?.value;
-  if (!(await verifyAuthToken(token))) {
-    if (pathname.startsWith("/api")) {
-      return NextResponse.json({ error: "Yetkisiz erişim" }, { status: 401 });
-    }
-    const loginUrl = new URL("/login", request.url);
-    loginUrl.searchParams.set("next", pathname);
-    return NextResponse.redirect(loginUrl);
+  const jeton = request.cookies.get(OTURUM_COOKIE)?.value;
+  if (await jetonGecerliMi(jeton)) {
+    return NextResponse.next();
   }
 
-  return NextResponse.next();
+  if (pathname.startsWith("/api")) {
+    return NextResponse.json({ hata: "Oturum gerekli" }, { status: 401 });
+  }
+
+  const hedef = new URL("/giris", request.url);
+  if (pathname !== "/") hedef.searchParams.set("devam", pathname);
+  return NextResponse.redirect(hedef);
 }
 
 export const config = {
