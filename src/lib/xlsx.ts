@@ -163,12 +163,14 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
       for (const [etiket, deger, bas, son] of alanlar) {
         sayfa.mergeCells(satirNo, bas, satirNo, son);
         const hucre = sayfa.getCell(satirNo, bas);
-        hucre.value = deger ? `${etiket} ${deger}` : etiket;
+        // Etiket ve değer alt alta. Aynı satırda olsaydı "SİPARİŞ TARİHİ: 25.08.2026"
+        // birleştirilmiş hücreye sığmayıp yandaki hücre tarafından kırpılıyordu.
+        hucre.value = deger ? `${etiket}\n${deger}` : etiket;
         hucre.font = { name: "Arial", size: 10, bold: true };
-        hucre.alignment = { horizontal: "left", vertical: "middle" };
+        hucre.alignment = { horizontal: "left", vertical: "middle", wrapText: true };
         hucre.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
       }
-      bilgiSatir.height = 20;
+      bilgiSatir.height = 30;
       satirNo += 1;
     } else {
       sayfa.mergeCells(satirNo, 1, satirNo, SON_KOLON);

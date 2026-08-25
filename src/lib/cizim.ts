@@ -146,6 +146,17 @@ function hucreYazisi(
   };
 }
 
+/**
+ * ŞUBE / SİPARİŞ TARİHİ / TESLİM TARİHİ kutusu.
+ *
+ * Etiket üstte küçük, değer altta kendi satırında. Bunun sebebi: "SİPARİŞ
+ * TARİHİ:" etiketi kutunun neredeyse tamamını kaplıyor, aynı satıra tarihi de
+ * sığdırmaya çalışınca tarih "2..." diye kırpılıyordu. Ayrı satırda tarihe
+ * kutunun tam genişliği kalıyor.
+ *
+ * Değer boşsa altına ince bir çizgi çiziliyor — form boş basılıp elle
+ * doldurulduğunda tarihin yazılacağı yer belli olsun diye.
+ */
 function bilgiKutusu(
   komutlar: CizimKomutu[],
   x: number,
@@ -157,29 +168,44 @@ function bilgiKutusu(
   boyut: number,
 ) {
   komutlar.push({ tur: "kutu", x, y, genislik, yukseklik, cerceve: RENK.cizgi, kalinlik: INCE });
+
+  const etiketBoyut = boyut * 0.74;
   komutlar.push({
     tur: "yazi",
     x: x + 1.5,
-    y: y + yukseklik / 2 + boyut * 0.36,
+    y: y + etiketBoyut + 1.4,
     metin: etiket,
-    boyut,
+    boyut: etiketBoyut,
     hiza: "sol",
     kalin: true,
     renk: RENK.soluk,
+    enFazlaGenislik: genislik - 3,
   });
-  // Değer sağa yaslanıyor. Etiketin genişliğini tahmin edip soluna yazsaydık,
-  // canvas ile PDF'in yazı ölçümleri birebir aynı olmadığı için biri taşardı.
-  const etiketGenislik = etiket.length * boyut * 0.62 + 3;
-  komutlar.push({
-    tur: "yazi",
-    x: x + genislik - 1.5,
-    y: y + yukseklik / 2 + boyut * 0.36,
-    metin: deger,
-    boyut,
-    hiza: "sag",
-    renk: RENK.metin,
-    enFazlaGenislik: genislik - etiketGenislik - 3,
-  });
+
+  const degerY = y + yukseklik - 2.2;
+  if (deger) {
+    komutlar.push({
+      tur: "yazi",
+      x: x + genislik / 2,
+      y: degerY,
+      metin: deger,
+      boyut,
+      hiza: "orta",
+      renk: RENK.metin,
+      enFazlaGenislik: genislik - 3,
+    });
+  } else {
+    // Elle doldurma çizgisi
+    komutlar.push({
+      tur: "kutu",
+      x: x + 4,
+      y: degerY + 0.8,
+      genislik: genislik - 8,
+      yukseklik: 0,
+      cerceve: RENK.cizgi,
+      kalinlik: INCE,
+    });
+  }
 }
 
 function blokCiz(

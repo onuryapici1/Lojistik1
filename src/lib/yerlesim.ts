@@ -67,7 +67,11 @@ export const SIPARIS_TARIHI_KUTU_GENISLIK = SUTUN_GENISLIK.miktar + SUTUN_GENISL
 
 /** Sayfa başındaki sabit alanlar (ölçekten etkilenmez, form hep okunaklı kalsın diye). */
 export const BASLIK_YUKSEKLIK = 9; // "MALZEME SİPARİŞ FORMU" / "TESLİM TARİHİ" satırı
-export const BILGI_YUKSEKLIK = 8; // ŞUBE / SİPARİŞ TARİHİ / TESLİM TARİHİ değer satırı
+/**
+ * ŞUBE / SİPARİŞ TARİHİ / TESLİM TARİHİ satırı.
+ * İki satırlık: üstte etiket, altta değer (veya elle yazmak için çizgi).
+ */
+export const BILGI_YUKSEKLIK = 11;
 /**
  * Bilgi satırı ile tablo arasındaki boşluk.
  * Şablonda başlık, bilgi satırı ve tablo kesintisiz bitişik; 0 bırakıyoruz.
