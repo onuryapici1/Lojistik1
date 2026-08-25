@@ -98,9 +98,13 @@ export async function pdfUret(cizim: Cizim): Promise<Uint8Array> {
   belge.registerFontkit(fontkit);
 
   const ham = await fontlariOku();
+  // NOT: subset:true bu Noto Sans dosyasında pdf-lib/fontkit ile bir kısım
+  // harfleri (Türkçe olmayanlar dahil, ör. L, Z, F, O, U) sessizce düşürüyor —
+  // dosya "başarılı" üretiliyor ama gerçek bir PDF görüntüleyicide harfler
+  // kayboluyor. subset kapalı: dosya ~600 KB büyüyor ama tüm glifler eksiksiz.
   const fontlar = {
-    normal: await belge.embedFont(ham.normal, { subset: true }),
-    kalin: await belge.embedFont(ham.kalin, { subset: true }),
+    normal: await belge.embedFont(ham.normal, { subset: false }),
+    kalin: await belge.embedFont(ham.kalin, { subset: false }),
   };
 
   belge.setTitle("Malzeme Sipariş Formu");

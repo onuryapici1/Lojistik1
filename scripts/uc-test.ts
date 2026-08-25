@@ -21,7 +21,7 @@ const form = {
   hedefSayfa: 2,
   olcek: 100,
   satirlar: Array.from({length: 180}, (_, i) => ({
-    id: `s${i}`, malzemeAdi: `Ürün ${i+1} çğışöü`, miktar: String(i%20+1),
+    id: `s${i}`, tur: "urun" as const, malzemeAdi: `Ürün ${i+1} çğışöü`, miktar: String(i%20+1),
     stokDurumu: (["Var","Az","Yok",""] as const)[i%4],
   })),
 };

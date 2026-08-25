@@ -28,6 +28,7 @@ model OrderItem {
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderId   String
   position  Int // genel sıralama (0'dan başlar), listedeki gerçek konum
+  satirTuru  String  @default("urun") // "urun" | "baslik"
   malzemeAdi String  @default("")
   miktar     String  @default("")
   stokDurumu String  @default("")

@@ -21,17 +21,18 @@ export const BLOK_GENISLIK = (ICERIK_GENISLIK - BLOK_ARASI) / 2; // 92.5
 
 /**
  * Blok içindeki sütun genişlikleri; toplamı BLOK_GENISLIK olmalı.
- * "Stok Durumu" başlığı kırpılmadan sığsın diye o sütun geniş tutuldu.
+ * Orijinal Excel şablonundaki sütun genişlik oranlarıyla (6:32:11:15) birebir
+ * eşleşiyor — şablon burada referans, uydurma değer değil.
  */
 export const SUTUN_GENISLIK = {
-  sira: 7,
-  malzemeAdi: 42.5,
-  miktar: 16,
-  stokDurumu: 27,
+  sira: 8.6,
+  malzemeAdi: 46.3,
+  miktar: 15.9,
+  stokDurumu: 21.7,
 } as const;
 
 /** Sütun başlığı yazısı, hücre yazısından biraz küçük (uzun başlıklar sığsın diye). */
-export const BASLIK_YAZI_ORANI = 0.85;
+export const BASLIK_YAZI_ORANI = 0.68;
 
 export const SUTUN_BASLIKLARI = {
   sira: "Sıra",
@@ -40,9 +41,20 @@ export const SUTUN_BASLIKLARI = {
   stokDurumu: "Stok Durumu",
 } as const;
 
+/**
+ * Sayfa başlığı alanı, orijinal Excel şablonuyla birebir aynı yerleşimde:
+ *
+ *   [ MALZEME SİPARİŞ FORMU (sol blok genişliği) ] [ TESLİM TARİHİ (sağ blok genişliği) ]
+ *   [ ŞUBE: (sıra+malzemeAdı) ][ SİPARİŞ TARİHİ: (miktar+stok) ] [ TESLİM TARİHİ: (sağ blok) ]
+ *
+ * Üstteki "TESLİM TARİHİ" bir bölüm başlığıdır; asıl değer alttaki kutuda yazar.
+ */
+export const SUBE_KUTU_GENISLIK = SUTUN_GENISLIK.sira + SUTUN_GENISLIK.malzemeAdi;
+export const SIPARIS_TARIHI_KUTU_GENISLIK = SUTUN_GENISLIK.miktar + SUTUN_GENISLIK.stokDurumu;
+
 /** Sayfa başındaki sabit alanlar (ölçekten etkilenmez, form hep okunaklı kalsın diye). */
-export const BASLIK_YUKSEKLIK = 9; // "MALZEME SİPARİŞ FORMU"
-export const BILGI_YUKSEKLIK = 8; // ŞUBE / SİPARİŞ TARİHİ / TESLİM TARİHİ
+export const BASLIK_YUKSEKLIK = 9; // "MALZEME SİPARİŞ FORMU" / "TESLİM TARİHİ" satırı
+export const BILGI_YUKSEKLIK = 8; // ŞUBE / SİPARİŞ TARİHİ / TESLİM TARİHİ değer satırı
 export const BASLIK_ALT_BOSLUK = 3;
 /** 2. ve sonraki sayfalarda sadece küçük bir "devam" başlığı olur. */
 export const DEVAM_BASLIK_YUKSEKLIK = 7;
@@ -53,7 +65,7 @@ export const NOT_YUKSEKLIK = 13;
 export const VARSAYILAN_NOTLAR = [
   "Malzeme adları Malzeme Adı sütunundaki boş satırlara yazılır.",
   "Miktar sayı olarak girilir (ör. 10). Stok Durumu: Var / Az / Yok.",
-  "Sağ blok, sol bloğun devamıdır.",
+  "Grup başlıkları (ör. ET GRUBU) kendi satırında, renkli olarak gösterilir.",
 ];
 
 /** Ölçek %100 iken bir tablo satırının yüksekliği. */

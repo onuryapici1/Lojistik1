@@ -11,9 +11,18 @@ export type StokDurumu = "" | "Var" | "Az" | "Yok";
 
 export const STOK_SECENEKLERI: StokDurumu[] = ["", "Var", "Az", "Yok"];
 
+/**
+ * Satır türü.
+ * - `urun`   : normal malzeme satırı (Malzeme Adı / Miktar / Stok Durumu)
+ * - `baslik` : "ET GRUBU", "SOSLAR" gibi grup başlığı — kendi satırını kaplar,
+ *              miktar/stok alanı olmaz, kalın ve renkli basılır.
+ */
+export type SatirTuru = "urun" | "baslik";
+
 export interface FormSatiri {
   /** İstemci tarafında satırı takip etmek için; veritabanı kimliğiyle aynı olmak zorunda değil. */
   id: string;
+  tur: SatirTuru;
   malzemeAdi: string;
   /** Serbest metin: "10", "2 koli", "yarım kasa" gibi girdilere izin verir. */
   miktar: string;
@@ -55,7 +64,11 @@ export function yeniId(): string {
 }
 
 export function bosSatir(): FormSatiri {
-  return { id: yeniId(), malzemeAdi: "", miktar: "", stokDurumu: "" };
+  return { id: yeniId(), tur: "urun", malzemeAdi: "", miktar: "", stokDurumu: "" };
+}
+
+export function bosBaslik(): FormSatiri {
+  return { id: yeniId(), tur: "baslik", malzemeAdi: "", miktar: "", stokDurumu: "" };
 }
 
 export function satirBosMu(satir: FormSatiri): boolean {

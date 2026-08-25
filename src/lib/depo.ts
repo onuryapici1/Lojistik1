@@ -6,12 +6,13 @@
  */
 
 import { prisma } from "./prisma";
-import type { FormVerisi, FormSatiri, SayfaModu, StokDurumu } from "./types";
+import type { FormVerisi, FormSatiri, SayfaModu, SatirTuru, StokDurumu } from "./types";
 import { yeniId } from "./types";
 import { MIN_OLCEK, MAX_OLCEK } from "./yerlesim";
 
 const GECERLI_MODLAR: SayfaModu[] = ["auto", "tekSayfa", "bol"];
 const GECERLI_STOK: StokDurumu[] = ["", "Var", "Az", "Yok"];
+const GECERLI_TUR: SatirTuru[] = ["urun", "baslik"];
 
 function modOku(v: string): SayfaModu {
   // İlk sürümde "fit1" / "splitN" kullanılıyordu; eski kayıtlar okunabilsin.
@@ -22,6 +23,10 @@ function modOku(v: string): SayfaModu {
 
 function stokOku(v: string): StokDurumu {
   return (GECERLI_STOK as string[]).includes(v) ? (v as StokDurumu) : "";
+}
+
+function turOku(v: string): SatirTuru {
+  return (GECERLI_TUR as string[]).includes(v) ? (v as SatirTuru) : "urun";
 }
 
 /** Dışarıdan gelen ham gövdeyi güvenli bir FormVerisi'ne çevirir. */
@@ -37,11 +42,14 @@ export function formuDogrula(ham: unknown): { form: FormVerisi } | { hata: strin
 
   const satirlar: FormSatiri[] = satirlarHam.map((s) => {
     const r = (typeof s === "object" && s !== null ? s : {}) as Record<string, unknown>;
+    const tur = turOku(metin(r.tur, 10));
     return {
       id: metin(r.id, 64) || yeniId(),
+      tur,
       malzemeAdi: metin(r.malzemeAdi, 300),
-      miktar: metin(r.miktar, 60),
-      stokDurumu: stokOku(metin(r.stokDurumu, 10)),
+      // Başlık satırında miktar/stok görsel olarak gösterilmiyor; veride de tutmuyoruz.
+      miktar: tur === "baslik" ? "" : metin(r.miktar, 60),
+      stokDurumu: tur === "baslik" ? "" : stokOku(metin(r.stokDurumu, 10)),
     };
   });
 
@@ -73,7 +81,7 @@ type KayitliForm = {
   scale: number;
   createdAt: Date;
   updatedAt: Date;
-  items: { id: string; malzemeAdi: string; miktar: string; stokDurumu: string }[];
+  items: { id: string; satirTuru: string; malzemeAdi: string; miktar: string; stokDurumu: string }[];
 };
 
 function kayittanForma(k: KayitliForm): FormVerisi {
@@ -87,6 +95,7 @@ function kayittanForma(k: KayitliForm): FormVerisi {
     olcek: k.scale,
     satirlar: k.items.map((i) => ({
       id: i.id,
+      tur: turOku(i.satirTuru),
       malzemeAdi: i.malzemeAdi,
       miktar: i.miktar,
       stokDurumu: stokOku(i.stokDurumu),
@@ -98,7 +107,7 @@ function kayittanForma(k: KayitliForm): FormVerisi {
 
 const ITEM_SECIM = {
   orderBy: { position: "asc" as const },
-  select: { id: true, malzemeAdi: true, miktar: true, stokDurumu: true },
+  select: { id: true, satirTuru: true, malzemeAdi: true, miktar: true, stokDurumu: true },
 };
 
 export async function formOlustur(form: FormVerisi): Promise<FormVerisi> {
@@ -113,6 +122,7 @@ export async function formOlustur(form: FormVerisi): Promise<FormVerisi> {
       items: {
         create: form.satirlar.map((s, i) => ({
           position: i,
+          satirTuru: s.tur,
           malzemeAdi: s.malzemeAdi,
           miktar: s.miktar,
           stokDurumu: s.stokDurumu,
@@ -152,6 +162,7 @@ export async function formGuncelle(id: string, form: FormVerisi): Promise<FormVe
         items: {
           create: form.satirlar.map((s, i) => ({
             position: i,
+            satirTuru: s.tur,
             malzemeAdi: s.malzemeAdi,
             miktar: s.miktar,
             stokDurumu: s.stokDurumu,

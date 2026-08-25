@@ -11,7 +11,7 @@ import { Onizleme } from "./Onizleme";
 import { CiktiDugmeleri } from "./CiktiDugmeleri";
 
 import type { FormSatiri, FormVerisi } from "@/lib/types";
-import { bosForm, bosSatir } from "@/lib/types";
+import { bosBaslik, bosForm, bosSatir } from "@/lib/types";
 import { cizimUret } from "@/lib/cizim";
 import { ozet } from "@/lib/yerlesim";
 
@@ -70,6 +70,23 @@ export function FormDuzenleyici({ baslangic }: FormDuzenleyiciProps) {
       ...f,
       satirlar: [...f.satirlar, ...Array.from({ length: adet }, bosSatir)],
     }));
+  }, []);
+
+  const baslikEkle = useCallback(() => {
+    setForm((f) => ({ ...f, satirlar: [...f.satirlar, bosBaslik()] }));
+    setTimeout(() => listeSonu.current?.scrollIntoView({ behavior: "smooth", block: "end" }), 50);
+  }, []);
+
+  const satirTuruDegistir = useCallback((index: number) => {
+    setForm((f) => {
+      const satirlar = f.satirlar.slice();
+      const mevcut = satirlar[index];
+      satirlar[index] =
+        mevcut.tur === "baslik"
+          ? { ...mevcut, tur: "urun" }
+          : { ...mevcut, tur: "baslik", miktar: "", stokDurumu: "" };
+      return { ...f, satirlar };
+    });
   }, []);
 
   const satirSil = useCallback((index: number) => {
@@ -238,6 +255,7 @@ export function FormDuzenleyici({ baslangic }: FormDuzenleyiciProps) {
               onArayaEkle={arayaEkle}
               onSil={satirSil}
               onTasi={satirTasi}
+              onTurDegistir={satirTuruDegistir}
             />
 
             <div ref={listeSonu} className="flex flex-col sm:flex-row gap-2 pt-1">
@@ -254,6 +272,13 @@ export function FormDuzenleyici({ baslangic }: FormDuzenleyiciProps) {
                 className="flex-1 rounded-lg border border-slate-300 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 10 satır ekle
+              </button>
+              <button
+                type="button"
+                onClick={baslikEkle}
+                className="flex-1 rounded-lg border border-red-200 text-red-700 py-2.5 text-sm font-medium hover:bg-red-50"
+              >
+                Grup başlığı ekle
               </button>
             </div>
           </section>

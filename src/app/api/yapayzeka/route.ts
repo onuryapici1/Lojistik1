@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { GoogleGenAI, Type } from "@google/genai";
 import ExcelJS from "exceljs";
 
-import type { StokDurumu } from "@/lib/types";
+import type { SatirTuru, StokDurumu } from "@/lib/types";
 
 /**
  * Serbest metni ve/veya görselleri malzeme listesine çevirir.
@@ -39,9 +39,12 @@ const YONERGE = `Sen bir restoran/şube malzeme sipariş formunu dolduran yardı
 Sana verilen metin, fotoğraf veya ekran görüntüsünden malzeme listesini çıkar.
 
 Kurallar:
-- Her malzeme ayrı bir satır olacak.
-- "malzemeAdi" alanına ürünün adını yaz. Ürün grubu başlıklarını (İçecekler, Temizlik gibi)
-  ayrı satır YAPMA; sadece o grubun altındaki ürünleri listele.
+- Her satırın bir "tur" alanı var: "urun" veya "baslik".
+- Kaynakta "ET GRUBU", "SOSLAR", "İçecekler", "Temizlik" gibi bir grup/kategori başlığı
+  görürsen onu "tur":"baslik" olan AYRI bir satır yap; "malzemeAdi" alanına başlığın
+  kendisini yaz (ör. "ET GRUBU"), "miktar" ve "stokDurumu" alanlarını boş bırak.
+  Başlığı bir ürünün içine gömme, atlama da — kendi satırı olsun.
+- Normal malzemeler "tur":"urun" olur. "malzemeAdi" alanına ürünün adını yaz.
 - "miktar" alanına sayı veya "2 koli", "yarım kasa" gibi ifadeyi olduğu gibi yaz.
   Miktar belirtilmemişse boş bırak.
 - "stokDurumu" yalnızca şunlardan biri olabilir: "Var", "Az", "Yok" veya boş.
@@ -59,11 +62,12 @@ const SEMA = {
       items: {
         type: Type.OBJECT,
         properties: {
+          tur: { type: Type.STRING, format: "enum", enum: ["urun", "baslik"] },
           malzemeAdi: { type: Type.STRING },
           miktar: { type: Type.STRING },
           stokDurumu: { type: Type.STRING },
         },
-        required: ["malzemeAdi"],
+        required: ["tur", "malzemeAdi"],
       },
     },
   },
@@ -85,13 +89,17 @@ function stokNormalle(ham: unknown): StokDurumu {
   return "";
 }
 
+function turNormalle(ham: unknown): SatirTuru {
+  return ham === "baslik" ? "baslik" : "urun";
+}
+
 /** Excel dosyasını yapay zekaya göndermeden doğrudan okur. */
 async function excelOku(dosya: GelenDosya) {
   const kitap = new ExcelJS.Workbook();
   // exceljs'in tip tanımı eski Buffer imzasını bekliyor; içerik aynı.
   await kitap.xlsx.load(Buffer.from(dosya.veri, "base64") as unknown as Parameters<typeof kitap.xlsx.load>[0]);
 
-  const satirlar: { malzemeAdi: string; miktar: string; stokDurumu: StokDurumu }[] = [];
+  const satirlar: { tur: SatirTuru; malzemeAdi: string; miktar: string; stokDurumu: StokDurumu }[] = [];
 
   kitap.eachSheet((sayfa) => {
     sayfa.eachRow((satir) => {
@@ -107,11 +115,11 @@ async function excelOku(dosya: GelenDosya) {
         if (!ad) continue;
         // Başlık satırlarını atla
         if (/^malzeme ad/i.test(ad)) continue;
-        satirlar.push({
-          malzemeAdi: ad.slice(0, 300),
-          miktar: (hucreler[baslangic + 2] ?? "").slice(0, 60),
-          stokDurumu: stokNormalle(hucreler[baslangic + 3]),
-        });
+        const miktar = (hucreler[baslangic + 2] ?? "").slice(0, 60);
+        const stokDurumu = stokNormalle(hucreler[baslangic + 3]);
+        // Miktar ve stok ikisi de boşsa muhtemelen bir grup başlığıdır (ör. "ET GRUBU").
+        const tur: SatirTuru = !miktar && !stokDurumu ? "baslik" : "urun";
+        satirlar.push({ tur, malzemeAdi: ad.slice(0, 300), miktar, stokDurumu });
       }
     });
   });
@@ -136,7 +144,7 @@ export async function POST(request: Request) {
 
   // Excel dosyalarını doğrudan oku; yapay zekaya gerek yok.
   const excelDosyalari = dosyalar.filter((d) => EXCEL_TURLERI.has(d.mimeType));
-  const excelSatirlari: { malzemeAdi: string; miktar: string; stokDurumu: StokDurumu }[] = [];
+  const excelSatirlari: { tur: SatirTuru; malzemeAdi: string; miktar: string; stokDurumu: StokDurumu }[] = [];
   for (const d of excelDosyalari) {
     try {
       excelSatirlari.push(...(await excelOku(d)));
@@ -219,10 +227,12 @@ export async function POST(request: Request) {
     const satirlar = (Array.isArray(cozulmus.satirlar) ? cozulmus.satirlar : [])
       .map((s) => {
         const o = (typeof s === "object" && s !== null ? s : {}) as Record<string, unknown>;
+        const tur = turNormalle(o.tur);
         return {
+          tur,
           malzemeAdi: String(o.malzemeAdi ?? "").trim().slice(0, 300),
-          miktar: String(o.miktar ?? "").trim().slice(0, 60),
-          stokDurumu: stokNormalle(o.stokDurumu),
+          miktar: tur === "baslik" ? "" : String(o.miktar ?? "").trim().slice(0, 60),
+          stokDurumu: tur === "baslik" ? "" : stokNormalle(o.stokDurumu),
         };
       })
       .filter((s) => s.malzemeAdi.length > 0);

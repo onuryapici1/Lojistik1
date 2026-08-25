@@ -144,8 +144,9 @@ export function YapayZekaPaneli({ onSatirlarHazir }: YapayZekaPaneliProps) {
       }
 
       const gelen: FormSatiri[] = (veri.satirlar ?? []).map(
-        (s: { malzemeAdi?: string; miktar?: string; stokDurumu?: string }) => ({
+        (s: { tur?: string; malzemeAdi?: string; miktar?: string; stokDurumu?: string }) => ({
           id: yeniId(),
+          tur: s.tur === "baslik" ? "baslik" : "urun",
           malzemeAdi: s.malzemeAdi ?? "",
           miktar: s.miktar ?? "",
           stokDurumu: (s.stokDurumu ?? "") as FormSatiri["stokDurumu"],

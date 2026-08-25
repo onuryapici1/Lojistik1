@@ -10,6 +10,11 @@ import { STOK_SECENEKLERI } from "@/lib/types";
  * Sürükle-bırak yerine bilinçli olarak ok tuşları kullanılıyor: dokunmatik
  * ekranda sürükleme hem kaydırmayla çakışıyor hem de tek elle zor. Ok tuşları
  * telefonda da masaüstünde de aynı şekilde çalışıyor.
+ *
+ * Sıra numarasının kendisi aynı zamanda bir düğme: tıklanınca satırı "grup
+ * başlığı" (ET GRUBU, SOSLAR gibi) ile normal ürün satırı arasında geçirir.
+ * Ayrı bir düğme eklemek yerine bunu seçtik — mobilde zaten dar olan buton
+ * sırasına altıncı bir öğe sıkıştırmamak için.
  */
 
 export interface SatirListesiProps {
@@ -18,6 +23,7 @@ export interface SatirListesiProps {
   onArayaEkle: (index: number) => void;
   onSil: (index: number) => void;
   onTasi: (index: number, yon: -1 | 1) => void;
+  onTurDegistir: (index: number) => void;
 }
 
 const STOK_RENK: Record<string, string> = {
@@ -35,6 +41,7 @@ interface SatirProps {
   onArayaEkle: SatirListesiProps["onArayaEkle"];
   onSil: SatirListesiProps["onSil"];
   onTasi: SatirListesiProps["onTasi"];
+  onTurDegistir: SatirListesiProps["onTurDegistir"];
   adRef: (el: HTMLInputElement | null) => void;
   onEnter: (index: number) => void;
 }
@@ -47,17 +54,34 @@ const Satir = memo(function Satir({
   onArayaEkle,
   onSil,
   onTasi,
+  onTurDegistir,
   adRef,
   onEnter,
 }: SatirProps) {
+  const baslikMi = satir.tur === "baslik";
+
   return (
-    <li className="group bg-white border border-slate-200 rounded-xl p-2 sm:p-1.5 sm:rounded-lg">
+    <li
+      className={`group border rounded-xl p-2 sm:p-1.5 sm:rounded-lg ${
+        baslikMi ? "bg-red-50/60 border-red-200" : "bg-white border-slate-200"
+      }`}
+    >
       {/* Mobilde iki satır, sm ve üstünde tek satır ızgara */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="flex items-center gap-2 sm:contents">
-          <span className="w-7 shrink-0 text-center text-xs font-medium text-slate-400 tabular-nums sm:w-8">
+          <button
+            type="button"
+            onClick={() => onTurDegistir(index)}
+            title={baslikMi ? "Ürün satırına çevir" : "Grup başlığına çevir (ör. ET GRUBU)"}
+            aria-label={`${index + 1}. satır ${baslikMi ? "grup başlığı — ürün satırına çevirmek için tıklayın" : "sıra numarası — grup başlığına çevirmek için tıklayın"}`}
+            className={`w-7 h-7 shrink-0 rounded-md text-center text-xs font-bold tabular-nums sm:w-8 ${
+              baslikMi
+                ? "bg-red-600 text-white hover:bg-red-700"
+                : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            }`}
+          >
             {index + 1}
-          </span>
+          </button>
 
           <input
             ref={adRef}
@@ -69,35 +93,43 @@ const Satir = memo(function Satir({
                 onEnter(index);
               }
             }}
-            placeholder="Malzeme adı"
-            aria-label={`${index + 1}. satır malzeme adı`}
-            className="satir-alani flex-1 min-w-0 rounded-lg border border-slate-300 px-2.5 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:py-1.5"
+            placeholder={baslikMi ? "Grup başlığı, ör. ET GRUBU" : "Malzeme adı"}
+            aria-label={`${index + 1}. satır ${baslikMi ? "grup başlığı" : "malzeme adı"}`}
+            className={`satir-alani flex-1 min-w-0 rounded-lg border px-2.5 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:py-1.5 ${
+              baslikMi
+                ? "border-red-200 font-bold text-red-700 uppercase placeholder:normal-case placeholder:font-normal placeholder:text-red-300"
+                : "border-slate-300"
+            }`}
           />
         </div>
 
         {/* Mobilde girinti yok: miktar + stok + 4 düğme 375px'e ancak sığıyor. */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <input
-            value={satir.miktar}
-            onChange={(e) => onDegistir(index, "miktar", e.target.value)}
-            placeholder="Miktar"
-            inputMode="text"
-            aria-label={`${index + 1}. satır miktar`}
-            className="satir-alani flex-1 min-w-0 rounded-lg border border-slate-300 px-2 py-2 text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:flex-none sm:w-24 sm:py-1.5"
-          />
+          {!baslikMi && (
+            <>
+              <input
+                value={satir.miktar}
+                onChange={(e) => onDegistir(index, "miktar", e.target.value)}
+                placeholder="Miktar"
+                inputMode="text"
+                aria-label={`${index + 1}. satır miktar`}
+                className="satir-alani flex-1 min-w-0 rounded-lg border border-slate-300 px-2 py-2 text-center outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:flex-none sm:w-24 sm:py-1.5"
+              />
 
-          <select
-            value={satir.stokDurumu}
-            onChange={(e) => onDegistir(index, "stokDurumu", e.target.value as StokDurumu)}
-            aria-label={`${index + 1}. satır stok durumu`}
-            className={`satir-alani flex-1 min-w-0 rounded-lg border px-1.5 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:flex-none sm:w-28 sm:py-1.5 ${STOK_RENK[satir.stokDurumu] ?? STOK_RENK[""]}`}
-          >
-            {STOK_SECENEKLERI.map((s) => (
-              <option key={s || "bos"} value={s}>
-                {s || "Stok —"}
-              </option>
-            ))}
-          </select>
+              <select
+                value={satir.stokDurumu}
+                onChange={(e) => onDegistir(index, "stokDurumu", e.target.value as StokDurumu)}
+                aria-label={`${index + 1}. satır stok durumu`}
+                className={`satir-alani flex-1 min-w-0 rounded-lg border px-1.5 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 sm:flex-none sm:w-28 sm:py-1.5 ${STOK_RENK[satir.stokDurumu] ?? STOK_RENK[""]}`}
+              >
+                {STOK_SECENEKLERI.map((s) => (
+                  <option key={s || "bos"} value={s}>
+                    {s || "Stok —"}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           <div className="ml-auto flex items-center gap-0.5 sm:ml-0">
             <button
@@ -151,6 +183,7 @@ export function SatirListesi({
   onArayaEkle,
   onSil,
   onTasi,
+  onTurDegistir,
 }: SatirListesiProps) {
   // Araya satır eklendiğinde imleci yeni satıra taşımak için referansları tutuyoruz.
   const adReferanslari = useRef<(HTMLInputElement | null)[]>([]);
@@ -192,6 +225,7 @@ export function SatirListesi({
             }}
             onSil={onSil}
             onTasi={onTasi}
+            onTurDegistir={onTurDegistir}
             adRef={(el) => {
               adReferanslari.current[index] = el;
             }}

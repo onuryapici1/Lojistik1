@@ -18,6 +18,8 @@ import {
   SUTUN_BASLIKLARI,
   BASLIK_YAZI_ORANI,
   SUTUN_GENISLIK,
+  SUBE_KUTU_GENISLIK,
+  SIPARIS_TARIHI_KUTU_GENISLIK,
   BASLIK_YUKSEKLIK,
   BILGI_YUKSEKLIK,
   BASLIK_ALT_BOSLUK,
@@ -79,6 +81,8 @@ const RENK = {
   kalinCizgi: "#334155",
   baslikZemin: "#e2e8f0",
   seritZemin: "#f8fafc",
+  /** Grup başlığı satırları (ET GRUBU, SOSLAR vb.) — orijinal formdaki kırmızı vurguyla aynı. */
+  grupBasligi: "#b91c1c",
 } as const;
 
 const INCE = 0.18;
@@ -111,8 +115,8 @@ function hucreYazisi(
   boyut: number,
   kalin = false,
   renk: string = RENK.metin,
+  ic = 1.2, // hücre iç boşluğu; sütun başlığı gibi dar/kalın metinlerde küçültülür
 ): YaziKomutu {
-  const ic = 1.2; // hücre iç boşluğu
   const x =
     sutun.hiza === "sol"
       ? sutun.x + ic
@@ -202,6 +206,8 @@ function blokCiz(
         sutunBaslikYuksekligi,
         yaziBoyutu * BASLIK_YAZI_ORANI,
         true,
+        RENK.metin,
+        0.5,
       ),
     );
   }
@@ -264,15 +270,19 @@ function blokCiz(
   // İçerik
   hucreler.forEach((h, i) => {
     const satirY = govdeY + i * satirYuksekligi;
+    const baslikMi = h.satir.tur === "baslik";
     const degerler: Record<string, string> = {
       sira: String(h.sira),
       malzemeAdi: h.satir.malzemeAdi,
-      miktar: h.satir.miktar,
-      stokDurumu: h.satir.stokDurumu,
+      // Başlık satırında miktar/stok zaten boş geliyor (bosBaslik + formuDogrula
+      // bunu garanti ediyor) ama görsel olarak da bilerek boş bırakıyoruz.
+      miktar: baslikMi ? "" : h.satir.miktar,
+      stokDurumu: baslikMi ? "" : h.satir.stokDurumu,
     };
     for (const s of sutunlar) {
       const deger = degerler[s.anahtar];
       if (!deger) continue;
+      const malzemeSutunu = s.anahtar === "malzemeAdi";
       komutlar.push(
         hucreYazisi(
           deger,
@@ -280,8 +290,8 @@ function blokCiz(
           satirY,
           satirYuksekligi,
           yaziBoyutu,
-          false,
-          s.anahtar === "sira" ? RENK.soluk : RENK.metin,
+          s.anahtar === "sira" ? false : baslikMi && malzemeSutunu,
+          s.anahtar === "sira" ? RENK.soluk : baslikMi && malzemeSutunu ? RENK.grupBasligi : RENK.metin,
         ),
       );
     }
@@ -314,28 +324,43 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
     let y = KENAR_BOSLUK;
 
     if (sayfa.ilkSayfa) {
-      // Ana başlık
+      // Başlık satırı: orijinal Excel şablonuyla birebir aynı — "MALZEME SİPARİŞ
+      // FORMU" yalnızca sol blok genişliğinde, "TESLİM TARİHİ" sağ blok genişliğinde
+      // ikinci bir bölüm başlığı olarak (A1:D1 / E1:G1 birleştirilmiş hücreleri).
+      const solBlokX = KENAR_BOSLUK;
+      const sagBlokX = KENAR_BOSLUK + BLOK_GENISLIK + BLOK_ARASI;
+
       komutlar.push({
         tur: "yazi",
-        x: KENAR_BOSLUK + ICERIK_GENISLIK / 2,
+        x: solBlokX + BLOK_GENISLIK / 2,
         y: y + BASLIK_YUKSEKLIK * 0.68,
         metin: "MALZEME SİPARİŞ FORMU",
-        boyut: 5.2,
+        boyut: 4.6,
+        hiza: "orta",
+        kalin: true,
+        renk: RENK.metin,
+      });
+      komutlar.push({
+        tur: "yazi",
+        x: sagBlokX + BLOK_GENISLIK / 2,
+        y: y + BASLIK_YUKSEKLIK * 0.68,
+        metin: "TESLİM TARİHİ",
+        boyut: 4.6,
         hiza: "orta",
         kalin: true,
         renk: RENK.metin,
       });
       y += BASLIK_YUKSEKLIK;
 
-      // Şube / tarihler
-      const kutuGenislik = (ICERIK_GENISLIK - 2 * 2) / 3;
+      // Değer satırı: ŞUBE + SİPARİŞ TARİHİ sol blok altında (A2:B2 / C2:D2),
+      // TESLİM TARİHİ sağ blok altında tam genişlikte (E2:G2).
       const bilgiBoyut = 3.1;
-      bilgiKutusu(komutlar, KENAR_BOSLUK, y, kutuGenislik, BILGI_YUKSEKLIK, "ŞUBE:", form.sube, bilgiBoyut);
+      bilgiKutusu(komutlar, solBlokX, y, SUBE_KUTU_GENISLIK, BILGI_YUKSEKLIK, "ŞUBE:", form.sube, bilgiBoyut);
       bilgiKutusu(
         komutlar,
-        KENAR_BOSLUK + kutuGenislik + 2,
+        solBlokX + SUBE_KUTU_GENISLIK,
         y,
-        kutuGenislik,
+        SIPARIS_TARIHI_KUTU_GENISLIK,
         BILGI_YUKSEKLIK,
         "SİPARİŞ TARİHİ:",
         tarihGoster(form.siparisTarihi),
@@ -343,9 +368,9 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
       );
       bilgiKutusu(
         komutlar,
-        KENAR_BOSLUK + (kutuGenislik + 2) * 2,
+        sagBlokX,
         y,
-        kutuGenislik,
+        BLOK_GENISLIK,
         BILGI_YUKSEKLIK,
         "TESLİM TARİHİ:",
         tarihGoster(form.teslimTarihi),
