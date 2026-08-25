@@ -13,26 +13,39 @@ export const SAYFA_GENISLIK = 210;
 export const SAYFA_YUKSEKLIK = 297;
 export const KENAR_BOSLUK = 10;
 
-/** İki blok arasındaki boşluk. */
-export const BLOK_ARASI = 5;
-
 export const ICERIK_GENISLIK = SAYFA_GENISLIK - KENAR_BOSLUK * 2; // 190
-export const BLOK_GENISLIK = (ICERIK_GENISLIK - BLOK_ARASI) / 2; // 92.5
 
 /**
- * Blok içindeki sütun genişlikleri; toplamı BLOK_GENISLIK olmalı.
- * Orijinal Excel şablonundaki sütun genişlik oranlarıyla (6:32:11:15) birebir
- * eşleşiyor — şablon burada referans, uydurma değer değil.
+ * Sütun genişlikleri, orijinal Excel şablonundan birebir alınmıştır.
+ *
+ * Şablonda 7 sütun var ve iki blok EŞİT DEĞİL — "Sıra" yalnızca sol blokta:
+ *
+ *   A(6) Sıra │ B(32) Malzeme Adı │ C(11) Miktar │ D(15) Stok │ E(32) Malzeme Adı │ F(11) Miktar │ G(15) Stok
+ *   └────────────── sol blok ──────────────────┘ └──────────── sağ blok ────────────┘
+ *
+ * Excel'in karakter birimlerini sayfaya orantılı olarak yayıyoruz; bloklar
+ * arasında boşluk yok, tek bir bütün tablo (şablondaki gibi).
  */
+const EXCEL_BIRIMLERI = { sira: 6, malzemeAdi: 32, miktar: 11, stokDurumu: 15 } as const;
+const BIRIM_TOPLAM =
+  EXCEL_BIRIMLERI.sira + (EXCEL_BIRIMLERI.malzemeAdi + EXCEL_BIRIMLERI.miktar + EXCEL_BIRIMLERI.stokDurumu) * 2; // 122
+const MM_BASINA_BIRIM = ICERIK_GENISLIK / BIRIM_TOPLAM;
+
 export const SUTUN_GENISLIK = {
-  sira: 8.6,
-  malzemeAdi: 46.3,
-  miktar: 15.9,
-  stokDurumu: 21.7,
+  sira: EXCEL_BIRIMLERI.sira * MM_BASINA_BIRIM,
+  malzemeAdi: EXCEL_BIRIMLERI.malzemeAdi * MM_BASINA_BIRIM,
+  miktar: EXCEL_BIRIMLERI.miktar * MM_BASINA_BIRIM,
+  stokDurumu: EXCEL_BIRIMLERI.stokDurumu * MM_BASINA_BIRIM,
 } as const;
 
+/** Sol blok "Sıra" sütununu da içerir, bu yüzden sağ bloktan geniştir. */
+export const SOL_BLOK_GENISLIK =
+  SUTUN_GENISLIK.sira + SUTUN_GENISLIK.malzemeAdi + SUTUN_GENISLIK.miktar + SUTUN_GENISLIK.stokDurumu;
+export const SAG_BLOK_GENISLIK =
+  SUTUN_GENISLIK.malzemeAdi + SUTUN_GENISLIK.miktar + SUTUN_GENISLIK.stokDurumu;
+
 /** Sütun başlığı yazısı, hücre yazısından biraz küçük (uzun başlıklar sığsın diye). */
-export const BASLIK_YAZI_ORANI = 0.68;
+export const BASLIK_YAZI_ORANI = 0.78;
 
 export const SUTUN_BASLIKLARI = {
   sira: "Sıra",
@@ -44,8 +57,8 @@ export const SUTUN_BASLIKLARI = {
 /**
  * Sayfa başlığı alanı, orijinal Excel şablonuyla birebir aynı yerleşimde:
  *
- *   [ MALZEME SİPARİŞ FORMU (sol blok genişliği) ] [ TESLİM TARİHİ (sağ blok genişliği) ]
- *   [ ŞUBE: (sıra+malzemeAdı) ][ SİPARİŞ TARİHİ: (miktar+stok) ] [ TESLİM TARİHİ: (sağ blok) ]
+ *   [ MALZEME SİPARİŞ FORMU (A1:D1) ][ TESLİM TARİHİ (E1:G1) ]
+ *   [ ŞUBE: (A2:B2) ][ SİPARİŞ TARİHİ: (C2:D2) ][ TESLİM TARİHİ: (E2:G2) ]
  *
  * Üstteki "TESLİM TARİHİ" bir bölüm başlığıdır; asıl değer alttaki kutuda yazar.
  */
@@ -55,7 +68,11 @@ export const SIPARIS_TARIHI_KUTU_GENISLIK = SUTUN_GENISLIK.miktar + SUTUN_GENISL
 /** Sayfa başındaki sabit alanlar (ölçekten etkilenmez, form hep okunaklı kalsın diye). */
 export const BASLIK_YUKSEKLIK = 9; // "MALZEME SİPARİŞ FORMU" / "TESLİM TARİHİ" satırı
 export const BILGI_YUKSEKLIK = 8; // ŞUBE / SİPARİŞ TARİHİ / TESLİM TARİHİ değer satırı
-export const BASLIK_ALT_BOSLUK = 3;
+/**
+ * Bilgi satırı ile tablo arasındaki boşluk.
+ * Şablonda başlık, bilgi satırı ve tablo kesintisiz bitişik; 0 bırakıyoruz.
+ */
+export const BASLIK_ALT_BOSLUK = 0;
 /** 2. ve sonraki sayfalarda sadece küçük bir "devam" başlığı olur. */
 export const DEVAM_BASLIK_YUKSEKLIK = 7;
 

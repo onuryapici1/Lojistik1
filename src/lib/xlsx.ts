@@ -22,7 +22,11 @@ function mmToKarakter(mm: number): number {
 const INCE_KENAR = { style: "thin" as const, color: { argb: "FF94A3B8" } };
 const KALIN_KENAR = { style: "medium" as const, color: { argb: "FF334155" } };
 
-const BASLIKLAR = ["Sıra", "Malzeme Adı", "Miktar", "Stok Durumu"];
+const SOL_BASLIKLAR = ["Sıra", "Malzeme Adı", "Miktar", "Stok Durumu"];
+const SAG_BASLIKLAR = ["Malzeme Adı", "Miktar", "Stok Durumu"];
+/** Sağ blok E sütunundan başlar (A-D sol blok). */
+const SAG_BLOK_ILK_KOLON = 5;
+const SON_KOLON = 7;
 
 export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
   const yerlesim = sayfala(form);
@@ -43,13 +47,13 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
     views: [{ state: "frozen", ySplit: 3 }],
   });
 
-  // Sekiz sütun: iki blok, her birinde Sıra / Malzeme Adı / Miktar / Stok Durumu
+  // Yedi sütun, şablonla birebir: A=Sıra, B-D sol blok, E-G sağ blok.
+  // "Sıra" yalnızca sol blokta var, bu yüzden sağ blok üç sütun.
   sayfa.columns = [
     { width: mmToKarakter(SUTUN_GENISLIK.sira) },
     { width: mmToKarakter(SUTUN_GENISLIK.malzemeAdi) },
     { width: mmToKarakter(SUTUN_GENISLIK.miktar) },
     { width: mmToKarakter(SUTUN_GENISLIK.stokDurumu) },
-    { width: mmToKarakter(SUTUN_GENISLIK.sira) },
     { width: mmToKarakter(SUTUN_GENISLIK.malzemeAdi) },
     { width: mmToKarakter(SUTUN_GENISLIK.miktar) },
     { width: mmToKarakter(SUTUN_GENISLIK.stokDurumu) },
@@ -58,34 +62,40 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
   let satirNo = 1;
 
   /**
-   * Bir bloğun tek satırını yazar: sıra numarası + malzeme/miktar/stok.
-   * Grup başlığı ise (ör. "ET GRUBU") malzeme+miktar+stok sütunları birleştirilip
-   * kalın kırmızı tek hücre olarak basılır — orijinal formdaki görünümle aynı.
+   * Bir bloğun tek satırını yazar.
    *
-   * @param baslangicKolon Bloğun sıra sütununun Excel kolon indeksi (sol=1, sağ=5).
+   * Sol blokta "Sıra" sütunu var, sağ blokta yok (şablon böyle). Grup başlığı
+   * satırlarında (ör. "ET GRUBU") malzeme+miktar+stok hücreleri birleştirilip
+   * kalın kırmızı tek hücre olarak basılır.
+   *
+   * @param ilkKolon Bloğun ilk Excel kolonu (sol=1, sağ=5).
+   * @param siraNo Sol blokta yazılacak sıra numarası; sağ blokta null.
    */
   function blokSatirYaz(
     satir: ExcelJS.Row,
-    baslangicKolon: number,
-    siraNo: number,
+    ilkKolon: number,
+    siraNo: number | null,
     veri: { tur: string; malzemeAdi: string; miktar: string; stokDurumu: string } | undefined,
   ) {
-    const siraHucre = satir.getCell(baslangicKolon);
-    siraHucre.value = siraNo;
-    siraHucre.font = { name: "Arial", size: 9, color: { argb: "FF9CA3AF" } };
-    siraHucre.alignment = { horizontal: "center", vertical: "middle" };
-    siraHucre.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
+    // Sol blokta ilk kolon "Sıra"; veri kolonları ondan sonra başlar.
+    let veriIlkKolon = ilkKolon;
+    if (siraNo !== null) {
+      const siraHucre = satir.getCell(ilkKolon);
+      siraHucre.value = siraNo;
+      siraHucre.font = { name: "Arial", size: 9, color: { argb: "FF9CA3AF" } };
+      siraHucre.alignment = { horizontal: "center", vertical: "middle" };
+      siraHucre.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
+      veriIlkKolon = ilkKolon + 1;
+    }
 
-    const baslikMi = veri?.tur === "baslik";
-
-    if (baslikMi) {
-      sayfa.mergeCells(satir.number, baslangicKolon + 1, satir.number, baslangicKolon + 3);
-      for (let k = 1; k <= 3; k++) {
-        const hucre = satir.getCell(baslangicKolon + k);
+    if (veri?.tur === "baslik") {
+      sayfa.mergeCells(satir.number, veriIlkKolon, satir.number, veriIlkKolon + 2);
+      for (let k = 0; k < 3; k++) {
+        const hucre = satir.getCell(veriIlkKolon + k);
         hucre.border = { top: INCE_KENAR, bottom: INCE_KENAR, left: INCE_KENAR, right: INCE_KENAR };
       }
-      const metinHucre = satir.getCell(baslangicKolon + 1);
-      metinHucre.value = veri?.malzemeAdi || null;
+      const metinHucre = satir.getCell(veriIlkKolon);
+      metinHucre.value = veri.malzemeAdi || null;
       metinHucre.font = { name: "Arial", size: 9, bold: true, color: { argb: KIRMIZI } };
       metinHucre.alignment = { horizontal: "left", vertical: "middle" };
       return;
@@ -97,7 +107,7 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
       veri?.stokDurumu || null,
     ];
     degerler.forEach((deger, k) => {
-      const hucre = satir.getCell(baslangicKolon + 1 + k);
+      const hucre = satir.getCell(veriIlkKolon + k);
       hucre.value = deger;
       hucre.font = { name: "Arial", size: 9 };
       hucre.alignment = { horizontal: k === 0 ? "left" : "center", vertical: "middle" };
@@ -107,11 +117,11 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
 
   function baslikSatiriYaz() {
     const satir = sayfa.getRow(satirNo);
-    [...BASLIKLAR, ...BASLIKLAR].forEach((baslik, i) => {
+    [...SOL_BASLIKLAR, ...SAG_BASLIKLAR].forEach((baslik, i) => {
       const hucre = satir.getCell(i + 1);
       hucre.value = baslik;
       hucre.font = { name: "Arial", size: 9, bold: true };
-      hucre.alignment = { horizontal: i % 4 === 1 ? "left" : "center", vertical: "middle" };
+      hucre.alignment = { horizontal: baslik === "Malzeme Adı" ? "left" : "center", vertical: "middle" };
       hucre.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE2E8F0" } };
       hucre.border = { top: KALIN_KENAR, bottom: KALIN_KENAR, left: INCE_KENAR, right: INCE_KENAR };
     });
@@ -134,8 +144,8 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
       baslikHucre.font = { name: "Arial", size: 14, bold: true };
       baslikHucre.alignment = { horizontal: "center", vertical: "middle" };
 
-      sayfa.mergeCells(satirNo, 5, satirNo, 8);
-      const teslimBaslikHucre = sayfa.getCell(satirNo, 5);
+      sayfa.mergeCells(satirNo, SAG_BLOK_ILK_KOLON, satirNo, SON_KOLON);
+      const teslimBaslikHucre = sayfa.getCell(satirNo, SAG_BLOK_ILK_KOLON);
       teslimBaslikHucre.value = "TESLİM TARİHİ";
       teslimBaslikHucre.font = { name: "Arial", size: 14, bold: true };
       teslimBaslikHucre.alignment = { horizontal: "center", vertical: "middle" };
@@ -148,7 +158,7 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
       const alanlar: [string, string, number, number][] = [
         ["ŞUBE:", form.sube, 1, 2],
         ["SİPARİŞ TARİHİ:", tarihGoster(form.siparisTarihi), 3, 4],
-        ["TESLİM TARİHİ:", tarihGoster(form.teslimTarihi), 5, 8],
+        ["TESLİM TARİHİ:", tarihGoster(form.teslimTarihi), SAG_BLOK_ILK_KOLON, SON_KOLON],
       ];
       for (const [etiket, deger, bas, son] of alanlar) {
         sayfa.mergeCells(satirNo, bas, satirNo, son);
@@ -161,7 +171,7 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
       bilgiSatir.height = 20;
       satirNo += 1;
     } else {
-      sayfa.mergeCells(satirNo, 1, satirNo, 8);
+      sayfa.mergeCells(satirNo, 1, satirNo, SON_KOLON);
       const hucre = sayfa.getCell(satirNo, 1);
       hucre.value = `MALZEME SİPARİŞ FORMU${form.sube ? ` — ${form.sube}` : ""} (devam)`;
       hucre.font = { name: "Arial", size: 10, bold: true, color: { argb: "FF6B7280" } };
@@ -177,7 +187,8 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
     for (let i = 0; i < adet; i++) {
       const satir = sayfa.getRow(satirNo);
       blokSatirYaz(satir, 1, sayfaYerlesimi.blokBaslangic[0] + i, sol[i]?.satir);
-      blokSatirYaz(satir, 5, sayfaYerlesimi.blokBaslangic[1] + i, sag[i]?.satir);
+      // Sağ blokta sıra sütunu yok (şablon böyle), o yüzden numara geçmiyoruz.
+      blokSatirYaz(satir, SAG_BLOK_ILK_KOLON, null, sag[i]?.satir);
       satir.height = 15;
       satirNo += 1;
     }
@@ -185,14 +196,14 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
 
   // Kullanım notu
   satirNo += 1;
-  sayfa.mergeCells(satirNo, 1, satirNo, 8);
+  sayfa.mergeCells(satirNo, 1, satirNo, SON_KOLON);
   const notBaslik = sayfa.getCell(satirNo, 1);
   notBaslik.value = "KULLANIM NOTU";
   notBaslik.font = { name: "Arial", size: 9, bold: true, color: { argb: "FF6B7280" } };
   satirNo += 1;
 
   for (const not of VARSAYILAN_NOTLAR) {
-    sayfa.mergeCells(satirNo, 1, satirNo, 8);
+    sayfa.mergeCells(satirNo, 1, satirNo, SON_KOLON);
     const hucre = sayfa.getCell(satirNo, 1);
     hucre.value = `• ${not}`;
     hucre.font = { name: "Arial", size: 9, color: { argb: "FF6B7280" } };

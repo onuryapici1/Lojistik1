@@ -11,8 +11,8 @@
 import type { FormVerisi } from "./types";
 import { tarihGoster } from "./types";
 import {
-  BLOK_ARASI,
-  BLOK_GENISLIK,
+  SOL_BLOK_GENISLIK,
+  SAG_BLOK_GENISLIK,
   ICERIK_GENISLIK,
   KENAR_BOSLUK,
   SUTUN_BASLIKLARI,
@@ -88,18 +88,27 @@ const RENK = {
 const INCE = 0.18;
 const KALIN = 0.4;
 
-/** Blok içindeki sütunların bloğun soluna göre x konumu ve genişliği. */
-const SUTUNLAR = [
-  { anahtar: "sira" as const, genislik: SUTUN_GENISLIK.sira, hiza: "orta" as Hiza },
-  { anahtar: "malzemeAdi" as const, genislik: SUTUN_GENISLIK.malzemeAdi, hiza: "sol" as Hiza },
-  { anahtar: "miktar" as const, genislik: SUTUN_GENISLIK.miktar, hiza: "orta" as Hiza },
-  { anahtar: "stokDurumu" as const, genislik: SUTUN_GENISLIK.stokDurumu, hiza: "orta" as Hiza },
+type SutunTanimi = { anahtar: string; genislik: number; hiza: Hiza };
+
+const SIRA_SUTUNU: SutunTanimi = {
+  anahtar: "sira",
+  genislik: SUTUN_GENISLIK.sira,
+  hiza: "orta",
+};
+const VERI_SUTUNLARI: SutunTanimi[] = [
+  { anahtar: "malzemeAdi", genislik: SUTUN_GENISLIK.malzemeAdi, hiza: "sol" },
+  { anahtar: "miktar", genislik: SUTUN_GENISLIK.miktar, hiza: "orta" },
+  { anahtar: "stokDurumu", genislik: SUTUN_GENISLIK.stokDurumu, hiza: "orta" },
 ];
 
-function sutunKonumlari(blokX: number) {
+/** Şablonda "Sıra" yalnızca sol blokta var; sağ blok üç sütundan oluşur. */
+const SOL_SUTUNLAR: SutunTanimi[] = [SIRA_SUTUNU, ...VERI_SUTUNLARI];
+const SAG_SUTUNLAR: SutunTanimi[] = VERI_SUTUNLARI;
+
+function sutunKonumlari(blokX: number, sutunlar: SutunTanimi[]) {
   const sonuc: { anahtar: string; x: number; genislik: number; hiza: Hiza }[] = [];
   let x = blokX;
-  for (const s of SUTUNLAR) {
+  for (const s of sutunlar) {
     sonuc.push({ anahtar: s.anahtar, x, genislik: s.genislik, hiza: s.hiza });
     x += s.genislik;
   }
@@ -182,7 +191,9 @@ function blokCiz(
   yerlesim: Yerlesim,
 ) {
   const { satirYuksekligi, yaziBoyutu, sutunBaslikYuksekligi } = yerlesim;
-  const sutunlar = sutunKonumlari(blokX);
+  const solMu = blokIndex === 0;
+  const blokGenislik = solMu ? SOL_BLOK_GENISLIK : SAG_BLOK_GENISLIK;
+  const sutunlar = sutunKonumlari(blokX, solMu ? SOL_SUTUNLAR : SAG_SUTUNLAR);
   const hucreler = sayfa.bloklar[blokIndex];
   const satirAdedi = sayfa.blokSatirSayisi;
 
@@ -191,7 +202,7 @@ function blokCiz(
     tur: "kutu",
     x: blokX,
     y: tabloY,
-    genislik: BLOK_GENISLIK,
+    genislik: blokGenislik,
     yukseklik: sutunBaslikYuksekligi,
     dolgu: RENK.baslikZemin,
     cerceve: RENK.kalinCizgi,
@@ -222,7 +233,7 @@ function blokCiz(
         tur: "kutu",
         x: blokX,
         y: govdeY + i * satirYuksekligi,
-        genislik: BLOK_GENISLIK,
+        genislik: blokGenislik,
         yukseklik: satirYuksekligi,
         dolgu: RENK.seritZemin,
       });
@@ -236,7 +247,7 @@ function blokCiz(
       tur: "kutu",
       x: blokX,
       y,
-      genislik: BLOK_GENISLIK,
+      genislik: blokGenislik,
       yukseklik: 0,
       cerceve: RENK.cizgi,
       kalinlik: INCE,
@@ -261,7 +272,7 @@ function blokCiz(
     tur: "kutu",
     x: blokX,
     y: tabloY,
-    genislik: BLOK_GENISLIK,
+    genislik: blokGenislik,
     yukseklik: sutunBaslikYuksekligi + govdeYukseklik,
     cerceve: RENK.kalinCizgi,
     kalinlik: KALIN,
@@ -297,21 +308,24 @@ function blokCiz(
     }
   });
 
-  // Dolu satırların ötesindeki boş satırlara da sıra numarası yaz (elle doldurmak için).
-  const baslangic = sayfa.blokBaslangic[blokIndex];
-  for (let i = hucreler.length; i < satirAdedi; i++) {
-    const satirY = govdeY + i * satirYuksekligi;
-    komutlar.push(
-      hucreYazisi(
-        String(baslangic + i),
-        sutunlar[0],
-        satirY,
-        satirYuksekligi,
-        yaziBoyutu,
-        false,
-        RENK.cizgi,
-      ),
-    );
+  // Dolu satırların ötesindeki boş satırlara da sıra numarası yaz (elle doldurmak
+  // için). Sağ blokta "Sıra" sütunu yok — şablonda da yok — o yüzden atlanıyor.
+  if (solMu) {
+    const baslangic = sayfa.blokBaslangic[blokIndex];
+    for (let i = hucreler.length; i < satirAdedi; i++) {
+      const satirY = govdeY + i * satirYuksekligi;
+      komutlar.push(
+        hucreYazisi(
+          String(baslangic + i),
+          sutunlar[0],
+          satirY,
+          satirYuksekligi,
+          yaziBoyutu,
+          false,
+          RENK.cizgi,
+        ),
+      );
+    }
   }
 }
 
@@ -328,11 +342,30 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
       // FORMU" yalnızca sol blok genişliğinde, "TESLİM TARİHİ" sağ blok genişliğinde
       // ikinci bir bölüm başlığı olarak (A1:D1 / E1:G1 birleştirilmiş hücreleri).
       const solBlokX = KENAR_BOSLUK;
-      const sagBlokX = KENAR_BOSLUK + BLOK_GENISLIK + BLOK_ARASI;
+      const sagBlokX = KENAR_BOSLUK + SOL_BLOK_GENISLIK;
 
+      // Başlık satırı da çerçeveli (şablonda A1:D1 ve E1:G1 kenarlıklı hücreler).
+      komutlar.push({
+        tur: "kutu",
+        x: solBlokX,
+        y,
+        genislik: SOL_BLOK_GENISLIK,
+        yukseklik: BASLIK_YUKSEKLIK,
+        cerceve: RENK.kalinCizgi,
+        kalinlik: KALIN,
+      });
+      komutlar.push({
+        tur: "kutu",
+        x: sagBlokX,
+        y,
+        genislik: SAG_BLOK_GENISLIK,
+        yukseklik: BASLIK_YUKSEKLIK,
+        cerceve: RENK.kalinCizgi,
+        kalinlik: KALIN,
+      });
       komutlar.push({
         tur: "yazi",
-        x: solBlokX + BLOK_GENISLIK / 2,
+        x: solBlokX + SOL_BLOK_GENISLIK / 2,
         y: y + BASLIK_YUKSEKLIK * 0.68,
         metin: "MALZEME SİPARİŞ FORMU",
         boyut: 4.6,
@@ -342,7 +375,7 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
       });
       komutlar.push({
         tur: "yazi",
-        x: sagBlokX + BLOK_GENISLIK / 2,
+        x: sagBlokX + SAG_BLOK_GENISLIK / 2,
         y: y + BASLIK_YUKSEKLIK * 0.68,
         metin: "TESLİM TARİHİ",
         boyut: 4.6,
@@ -370,7 +403,7 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
         komutlar,
         sagBlokX,
         y,
-        BLOK_GENISLIK,
+        SAG_BLOK_GENISLIK,
         BILGI_YUKSEKLIK,
         "TESLİM TARİHİ:",
         tarihGoster(form.teslimTarihi),
@@ -391,8 +424,9 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
       y += DEVAM_BASLIK_YUKSEKLIK;
     }
 
+    // Bloklar bitişik: şablondaki gibi tek bir bütün tablo oluşturuyorlar.
     blokCiz(komutlar, sayfa, 0, KENAR_BOSLUK, y, yerlesim);
-    blokCiz(komutlar, sayfa, 1, KENAR_BOSLUK + BLOK_GENISLIK + BLOK_ARASI, y, yerlesim);
+    blokCiz(komutlar, sayfa, 1, KENAR_BOSLUK + SOL_BLOK_GENISLIK, y, yerlesim);
 
     // Alt bilgi ve notlar
     if (yerlesim.notVar) {
