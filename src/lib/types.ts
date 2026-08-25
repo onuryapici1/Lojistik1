@@ -101,11 +101,16 @@ export function bosForm(): FormVerisi {
  */
 export const TARIH_KALIBI = "../../....";
 
-/** Tarihi form üzerinde gösterilecek biçime çevirir: 2026-08-25 -> 25.08.2026 */
+/**
+ * Tarihi form üzerinde gösterilecek biçime çevirir: 2026-08-25 -> 25/08/2026
+ *
+ * Ayraç, TARIH_KALIBI ile aynı olmak zorunda: boş alanda "../../...." yazıp
+ * dolu alanda "25.08.2026" yazmak tutarsız görünüyordu.
+ */
 export function tarihGoster(iso: string): string {
   if (!iso) return "";
   const parcalar = iso.split("-");
   if (parcalar.length !== 3) return iso;
   const [yil, ay, gun] = parcalar;
-  return `${gun}.${ay}.${yil}`;
+  return `${gun}/${ay}/${yil}`;
 }
