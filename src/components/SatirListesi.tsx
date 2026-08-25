@@ -38,8 +38,10 @@ interface SatirProps {
   satir: FormSatiri;
   index: number;
   sonIndex: number;
+  /** Bu satır şu an parmağın/farenin altında taşınıyor mu. */
   suruklenenMi: boolean;
-  hedefMi: boolean;
+  /** Satırın dikeyde kaç piksel ötelenmesi gerektiği (sürükleme animasyonu). */
+  kaydirma: number;
   onDegistir: SatirListesiProps["onDegistir"];
   onArayaEkle: SatirListesiProps["onArayaEkle"];
   onSil: SatirListesiProps["onSil"];
@@ -55,7 +57,7 @@ const Satir = memo(function Satir({
   index,
   sonIndex,
   suruklenenMi,
-  hedefMi,
+  kaydirma,
   onDegistir,
   onArayaEkle,
   onSil,
@@ -70,9 +72,18 @@ const Satir = memo(function Satir({
   return (
     <li
       data-satir-index={index}
-      className={`group border rounded-xl p-2 sm:p-1.5 sm:rounded-lg transition-colors ${
+      style={{
+        transform: kaydirma ? `translateY(${kaydirma}px)` : undefined,
+        // Taşınan satır parmağı gecikmesiz izlemeli; diğerleri yumuşak kaysın.
+        transition: suruklenenMi ? "none" : "transform 150ms ease",
+      }}
+      className={`group border rounded-xl p-2 sm:p-1.5 sm:rounded-lg ${
         baslikMi ? "bg-red-50/60 border-red-200" : "bg-white border-slate-200"
-      } ${suruklenenMi ? "opacity-40" : ""} ${hedefMi ? "border-blue-400 border-dashed bg-blue-50/50" : ""}`}
+      } ${
+        suruklenenMi
+          ? "relative z-20 shadow-xl ring-2 ring-blue-400 cursor-grabbing select-none"
+          : "transition-colors"
+      }`}
     >
       <div className="flex flex-col sm:flex-row sm:items-center gap-2">
         <div className="flex items-center gap-1 sm:contents">
@@ -222,8 +233,17 @@ export function SatirListesi({
   const adReferanslari = useRef<(HTMLInputElement | null)[]>([]);
   const liste = useRef<HTMLUListElement | null>(null);
 
-  const [suruklenen, setSuruklenen] = useState<number | null>(null);
-  const [hedef, setHedef] = useState<number | null>(null);
+  /**
+   * Sürükleme durumu.
+   * `dy`: taşınan satırın başlangıç konumuna göre dikey ötelemesi (px).
+   * `adim`: bir satırın kapladığı dikey mesafe (yükseklik + aradaki boşluk).
+   */
+  const [surukleme, setSurukleme] = useState<{
+    kaynak: number;
+    hedef: number;
+    dy: number;
+    adim: number;
+  } | null>(null);
 
   function odaklan(index: number) {
     requestAnimationFrame(() => {
@@ -236,51 +256,99 @@ export function SatirListesi({
     odaklan(index + 1);
   }
 
-  /** İmlecin altındaki satırın indeksini bulur. */
-  function indexBul(clientY: number): number | null {
+  /**
+   * Sürükleme başlarkenki satır konumları.
+   *
+   * Sürükleme sırasında satırlara translateY uygulandığı için
+   * getBoundingClientRect() kaymış konumu döndürür — özellikle taşınan satır
+   * imlecin altına geldiği için hedef hep "kendisi" çıkar ve sıralama hiç
+   * uygulanmazdı. Bu yüzden konumları bir kez, hareket başlamadan ölçüyoruz.
+   */
+  const baslangicKutulari = useRef<{ ust: number; alt: number; index: number }[]>([]);
+  const baslangicScrollY = useRef(0);
+
+  function kutulariOl() {
     const kok = liste.current;
-    if (!kok) return null;
-    const ogeler = Array.from(kok.querySelectorAll<HTMLElement>("[data-satir-index]"));
-    for (const oge of ogeler) {
-      const r = oge.getBoundingClientRect();
-      if (clientY >= r.top && clientY <= r.bottom) {
-        return Number(oge.dataset.satirIndex);
-      }
+    baslangicScrollY.current = window.scrollY;
+    baslangicKutulari.current = kok
+      ? Array.from(kok.querySelectorAll<HTMLElement>("[data-satir-index]")).map((oge) => {
+          const r = oge.getBoundingClientRect();
+          return { ust: r.top, alt: r.bottom, index: Number(oge.dataset.satirIndex) };
+        })
+      : [];
+  }
+
+  /** İmlecin altındaki satırın indeksini, sürükleme öncesi düzene göre bulur. */
+  function indexBul(clientY: number): number | null {
+    const kutular = baslangicKutulari.current;
+    if (kutular.length === 0) return null;
+    // Sürükleme sırasında sayfa kaydıysa telafi et.
+    const y = clientY + (window.scrollY - baslangicScrollY.current);
+    for (const kutu of kutular) {
+      if (y >= kutu.ust && y <= kutu.alt) return kutu.index;
     }
     // Listenin dışına taşındıysa en yakın uca yapıştır.
-    if (ogeler.length === 0) return null;
-    const ilk = ogeler[0].getBoundingClientRect();
-    return clientY < ilk.top ? 0 : ogeler.length - 1;
+    return y < kutular[0].ust ? kutular[0].index : kutular[kutular.length - 1].index;
+  }
+
+  /** Bir satırın kapladığı dikey mesafe: yükseklik + satırlar arası boşluk. */
+  function adimOlc(): number {
+    const kok = liste.current;
+    if (!kok) return 0;
+    const ogeler = kok.querySelectorAll<HTMLElement>("[data-satir-index]");
+    if (ogeler.length === 0) return 0;
+    if (ogeler.length === 1) return ogeler[0].getBoundingClientRect().height + 6;
+    // İki komşunun üst kenarları arası = yükseklik + boşluk
+    return (
+      ogeler[1].getBoundingClientRect().top - ogeler[0].getBoundingClientRect().top
+    );
   }
 
   function tutamakBasildi(index: number, e: React.PointerEvent) {
     e.preventDefault();
-    setSuruklenen(index);
-    setHedef(index);
 
-    const hedefEl = e.currentTarget as HTMLElement;
-    hedefEl.setPointerCapture(e.pointerId);
+    const adim = adimOlc();
+    kutulariOl(); // dönüşümler uygulanmadan önce ölçülmeli
+    const baslangicY = e.clientY;
+    setSurukleme({ kaynak: index, hedef: index, dy: 0, adim });
+
+    const tutamakEl = e.currentTarget as HTMLElement;
+    tutamakEl.setPointerCapture(e.pointerId);
 
     function hareket(ev: PointerEvent) {
       const yeni = indexBul(ev.clientY);
-      if (yeni !== null) setHedef(yeni);
+      setSurukleme((s) =>
+        s ? { ...s, dy: ev.clientY - baslangicY, hedef: yeni ?? s.hedef } : s,
+      );
     }
 
     function bitir(ev: PointerEvent) {
-      hedefEl.releasePointerCapture?.(ev.pointerId);
-      hedefEl.removeEventListener("pointermove", hareket);
-      hedefEl.removeEventListener("pointerup", bitir);
-      hedefEl.removeEventListener("pointercancel", bitir);
+      tutamakEl.releasePointerCapture?.(ev.pointerId);
+      tutamakEl.removeEventListener("pointermove", hareket);
+      tutamakEl.removeEventListener("pointerup", bitir);
+      tutamakEl.removeEventListener("pointercancel", bitir);
 
       const son = indexBul(ev.clientY);
       if (son !== null && son !== index) onSiraDegistir(index, son);
-      setSuruklenen(null);
-      setHedef(null);
+      setSurukleme(null);
     }
 
-    hedefEl.addEventListener("pointermove", hareket);
-    hedefEl.addEventListener("pointerup", bitir);
-    hedefEl.addEventListener("pointercancel", bitir);
+    tutamakEl.addEventListener("pointermove", hareket);
+    tutamakEl.addEventListener("pointerup", bitir);
+    tutamakEl.addEventListener("pointercancel", bitir);
+  }
+
+  /**
+   * Bir satırın sürükleme sırasında ne kadar öteleneceği.
+   * Taşınan satır parmağı izler; aradaki satırlar bir adım kayarak yer açar.
+   */
+  function kaydirmaHesapla(index: number): number {
+    if (!surukleme) return 0;
+    const { kaynak, hedef, dy, adim } = surukleme;
+    if (index === kaynak) return dy;
+    if (hedef > kaynak && index > kaynak && index <= hedef) return -adim;
+    if (hedef < kaynak && index >= hedef && index < kaynak) return adim;
+    return 0;
   }
 
   return (
@@ -302,8 +370,8 @@ export function SatirListesi({
             satir={satir}
             index={index}
             sonIndex={satirlar.length - 1}
-            suruklenenMi={suruklenen === index}
-            hedefMi={suruklenen !== null && hedef === index && suruklenen !== index}
+            suruklenenMi={surukleme?.kaynak === index}
+            kaydirma={kaydirmaHesapla(index)}
             onDegistir={onDegistir}
             onArayaEkle={(i) => {
               onArayaEkle(i);
