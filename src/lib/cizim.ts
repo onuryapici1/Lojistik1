@@ -9,7 +9,7 @@
  */
 
 import type { FormVerisi } from "./types";
-import { tarihGoster } from "./types";
+import { tarihGoster, TARIH_KALIBI } from "./types";
 import {
   SOL_BLOK_GENISLIK,
   SAG_BLOK_GENISLIK,
@@ -154,8 +154,9 @@ function hucreYazisi(
  * sığdırmaya çalışınca tarih "2..." diye kırpılıyordu. Ayrı satırda tarihe
  * kutunun tam genişliği kalıyor.
  *
- * Değer boşsa altına ince bir çizgi çiziliyor — form boş basılıp elle
- * doldurulduğunda tarihin yazılacağı yer belli olsun diye.
+ * Değer boşsa `bosKalip` basılır (tarihlerde "../../....") — form boş basılıp
+ * elle doldurulacağı zaman yazılacak yer belli olsun diye. Kalıp verilmezse
+ * yerine ince bir çizgi çizilir.
  */
 function bilgiKutusu(
   komutlar: CizimKomutu[],
@@ -166,6 +167,7 @@ function bilgiKutusu(
   etiket: string,
   deger: string,
   boyut: number,
+  bosKalip?: string,
 ) {
   komutlar.push({ tur: "kutu", x, y, genislik, yukseklik, cerceve: RENK.cizgi, kalinlik: INCE });
 
@@ -183,19 +185,19 @@ function bilgiKutusu(
   });
 
   const degerY = y + yukseklik - 2.2;
-  if (deger) {
+  if (deger || bosKalip) {
     komutlar.push({
       tur: "yazi",
       x: x + genislik / 2,
       y: degerY,
-      metin: deger,
+      metin: deger || bosKalip!,
       boyut,
       hiza: "orta",
-      renk: RENK.metin,
+      renk: deger ? RENK.metin : RENK.cizgi,
       enFazlaGenislik: genislik - 3,
     });
   } else {
-    // Elle doldurma çizgisi
+    // Elle doldurma çizgisi (kalıbı olmayan alanlar, ör. ŞUBE)
     komutlar.push({
       tur: "kutu",
       x: x + 4,
@@ -424,6 +426,7 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
         "SİPARİŞ TARİHİ:",
         tarihGoster(form.siparisTarihi),
         bilgiBoyut,
+        TARIH_KALIBI,
       );
       bilgiKutusu(
         komutlar,
@@ -434,6 +437,7 @@ export function cizimUret(form: FormVerisi, secenekler: YerlesimSecenekleri = {}
         "TESLİM TARİHİ:",
         tarihGoster(form.teslimTarihi),
         bilgiBoyut,
+        TARIH_KALIBI,
       );
       y += BILGI_YUKSEKLIK + BASLIK_ALT_BOSLUK;
     } else {

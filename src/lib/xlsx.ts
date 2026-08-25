@@ -9,7 +9,7 @@
 import ExcelJS from "exceljs";
 
 import type { FormVerisi } from "./types";
-import { tarihGoster } from "./types";
+import { tarihGoster, TARIH_KALIBI } from "./types";
 import { sayfala, SUTUN_GENISLIK, VARSAYILAN_NOTLAR } from "./yerlesim";
 
 const KIRMIZI = "FFB91C1C";
@@ -155,10 +155,16 @@ export async function xlsxUret(form: FormVerisi): Promise<Buffer> {
 
       // Şube / sipariş tarihi (sol blok altında) + teslim tarihi (sağ blok altında)
       const bilgiSatir = sayfa.getRow(satirNo);
+      // Tarih seçilmemişse elle doldurulacak kalıp basılır ("../../....").
       const alanlar: [string, string, number, number][] = [
         ["ŞUBE:", form.sube, 1, 2],
-        ["SİPARİŞ TARİHİ:", tarihGoster(form.siparisTarihi), 3, 4],
-        ["TESLİM TARİHİ:", tarihGoster(form.teslimTarihi), SAG_BLOK_ILK_KOLON, SON_KOLON],
+        ["SİPARİŞ TARİHİ:", tarihGoster(form.siparisTarihi) || TARIH_KALIBI, 3, 4],
+        [
+          "TESLİM TARİHİ:",
+          tarihGoster(form.teslimTarihi) || TARIH_KALIBI,
+          SAG_BLOK_ILK_KOLON,
+          SON_KOLON,
+        ],
       ];
       for (const [etiket, deger, bas, son] of alanlar) {
         sayfa.mergeCells(satirNo, bas, satirNo, son);

@@ -95,6 +95,12 @@ export function bosForm(): FormVerisi {
   };
 }
 
+/**
+ * Tarih seçilmediğinde forma basılan boş kalıp.
+ * Kağıda basıp elle doldurmak için: gün/ay/yıl hanelerinin yeri belli olsun.
+ */
+export const TARIH_KALIBI = "../../....";
+
 /** Tarihi form üzerinde gösterilecek biçime çevirir: 2026-08-25 -> 25.08.2026 */
 export function tarihGoster(iso: string): string {
   if (!iso) return "";
