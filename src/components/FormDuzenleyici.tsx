@@ -106,6 +106,18 @@ export function FormDuzenleyici({ baslangic }: FormDuzenleyiciProps) {
     });
   }, []);
 
+  /** Sürükle-bırak: satırı kaynaktan çıkarıp hedefe yerleştirir (yer değiştirme değil). */
+  const siraDegistir = useCallback((kaynak: number, hedef: number) => {
+    setForm((f) => {
+      if (kaynak === hedef) return f;
+      const satirlar = f.satirlar.slice();
+      if (kaynak < 0 || kaynak >= satirlar.length || hedef < 0 || hedef >= satirlar.length) return f;
+      const [tasinan] = satirlar.splice(kaynak, 1);
+      satirlar.splice(hedef, 0, tasinan);
+      return { ...f, satirlar };
+    });
+  }, []);
+
   const yapayZekaSonucu = useCallback(
     (gelen: FormSatiri[], mod: "ekle" | "degistir") => {
       setForm((f) => {
@@ -256,6 +268,7 @@ export function FormDuzenleyici({ baslangic }: FormDuzenleyiciProps) {
               onSil={satirSil}
               onTasi={satirTasi}
               onTurDegistir={satirTuruDegistir}
+              onSiraDegistir={siraDegistir}
             />
 
             <div ref={listeSonu} className="flex flex-col sm:flex-row gap-2 pt-1">

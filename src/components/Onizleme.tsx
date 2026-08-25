@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Cizim } from "@/lib/cizim";
 import { sayfayiCiz, ONIZLEME_DPI } from "@/lib/cizim-canvas";
 
@@ -138,17 +139,22 @@ export function Onizleme({ cizim }: OnizlemeProps) {
         </button>
       </section>
 
-      {buyutulduMu && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-900/80 flex flex-col"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Büyütülmüş form önizlemesi"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setBuyutulduMu(false);
-          }}
-        >
-          <div className="flex items-center justify-between gap-2 p-3 text-white shrink-0">
+      {/* buyutulduMu yalnızca kullanıcı tıklamasıyla true olur, yani portal hiçbir
+          zaman sunucu render'ında kurulmaz — ayrıca bir "tarayıcıda mıyız" bayrağı
+          tutmaya gerek yok. */}
+      {buyutulduMu &&
+        createPortal(
+          // document.body'ye taşınıyor: önizleme paneli `sticky` bir kapsayıcının
+          // içinde ve sticky kendi yığın bağlamını oluşturuyor. Modal orada
+          // kalsaydı z-50 olmasına rağmen sayfa başlığının (z-10) altında çizilir,
+          // kapatma düğmesi başlığın arkasında kalırdı.
+          <div
+            className="fixed inset-0 z-50 bg-slate-900/80 flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Büyütülmüş form önizlemesi"
+          >
+            <div className="flex items-center justify-between gap-2 p-3 text-white shrink-0">
             <div className="flex items-center gap-2">
               {toplam > 1 && (
                 <>
@@ -206,34 +212,44 @@ export function Onizleme({ cizim }: OnizlemeProps) {
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setBuyutulduMu(false)}
-              aria-label="Kapat"
-              className="h-10 w-10 rounded-lg bg-white/10 hover:bg-white/20 text-lg"
-            >
-              ×
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-auto" onWheel={tekerlekleYakinlastir}>
-            <div
-              className="min-h-full flex items-center justify-center p-4"
-              style={{ minWidth: `${100 * yakinlastirma}%` }}
-            >
-              <canvas
-                ref={buyukTuval}
-                className="bg-white shadow-2xl rounded"
-                style={{
-                  width: `min(80vw, ${560 * yakinlastirma}px)`,
-                  height: "auto",
-                  aspectRatio: "210 / 297",
-                }}
-              />
+              <button
+                type="button"
+                onClick={() => setBuyutulduMu(false)}
+                aria-label="Kapat"
+                title="Kapat (Esc)"
+                className="h-10 w-10 rounded-lg bg-white/15 hover:bg-white/30 text-xl leading-none"
+              >
+                ×
+              </button>
             </div>
-          </div>
-        </div>
-      )}
+
+            {/* Boş alana tıklayınca kapansın: tıklama tuvalin kendisine değil,
+                çevresindeki boşluğa geldiyse modal kapanır. */}
+            <div
+              className="flex-1 overflow-auto"
+              onWheel={tekerlekleYakinlastir}
+              onClick={(e) => {
+                if (!(e.target as HTMLElement).closest("canvas")) setBuyutulduMu(false);
+              }}
+            >
+              <div
+                className="min-h-full flex items-center justify-center p-4"
+                style={{ minWidth: `${100 * yakinlastirma}%` }}
+              >
+                <canvas
+                  ref={buyukTuval}
+                  className="bg-white shadow-2xl rounded"
+                  style={{
+                    width: `min(80vw, ${560 * yakinlastirma}px)`,
+                    height: "auto",
+                    aspectRatio: "210 / 297",
+                  }}
+                />
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
     </>
   );
 }
