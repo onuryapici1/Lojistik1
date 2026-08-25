@@ -297,15 +297,24 @@ export function FormDuzenleyici({ baslangic }: FormDuzenleyiciProps) {
           </section>
         </div>
 
-        <div className="space-y-4 lg:sticky lg:top-[72px] min-w-0">
+        {/*
+          Mobilde bu sütun en başa alınıyor (order-first): tek sütuna indiğinde
+          aksi halde uzun malzeme listesinin altında kalıyor ve önizlemeye
+          ulaşmak için sayfanın sonuna kadar kaydırmak gerekiyordu.
+          Masaüstünde kaynak sırasına dönüyor, yani sağ sütun olarak kalıyor.
+
+          Sütun içi sıra: önce önizleme, hemen altında çıktı düğmeleri. Sayfa
+          düzeni ayarları daha seyrek kullanıldığı için en altta.
+        */}
+        <div className="order-first lg:order-none space-y-4 lg:sticky lg:top-[72px] min-w-0">
+          <Onizleme cizim={cizim} />
+          <CiktiDugmeleri form={form} cizim={cizim} />
           <SayfaAyarlari
             form={form}
             sayfaSayisi={anlikOzet.sayfaSayisi}
             uygulananOlcek={anlikOzet.olcek}
             onDegistir={yamala}
           />
-          <CiktiDugmeleri form={form} cizim={cizim} />
-          <Onizleme cizim={cizim} />
         </div>
       </main>
     </div>

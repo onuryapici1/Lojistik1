@@ -130,9 +130,12 @@ export function Onizleme({ cizim }: OnizlemeProps) {
           aria-label="Önizlemeyi büyüt"
           className="w-full bg-slate-100 rounded-lg p-2 sm:p-3 overflow-x-auto cursor-zoom-in"
         >
+          {/* Mobilde yükseklik sınırlı: A4 oranında tam genişlik verilirse
+              önizleme neredeyse bütün ekranı kaplıyor ve forma ulaşmak için
+              kaydırmak gerekiyor. Masaüstünde genişliğe göre ölçekleniyor. */}
           <canvas
             ref={tuval}
-            className="block mx-auto w-full h-auto max-w-[520px] bg-white shadow-sm rounded pointer-events-none"
+            className="block mx-auto h-[46vh] w-auto max-w-full bg-white shadow-sm rounded pointer-events-none sm:h-auto sm:w-full sm:max-w-[520px]"
             style={{ aspectRatio: "210 / 297" }}
             aria-label={`Form önizlemesi, sayfa ${gecerliIndex + 1} / ${toplam}`}
           />
