@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI, Type } from "@google/genai";
-import ExcelJS from "exceljs";
+import { excelOku } from "@/lib/excel-oku";
 
 import type { SatirTuru, StokDurumu } from "@/lib/types";
 
@@ -93,40 +93,6 @@ function turNormalle(ham: unknown): SatirTuru {
   return ham === "baslik" ? "baslik" : "urun";
 }
 
-/** Excel dosyasını yapay zekaya göndermeden doğrudan okur. */
-async function excelOku(dosya: GelenDosya) {
-  const kitap = new ExcelJS.Workbook();
-  // exceljs'in tip tanımı eski Buffer imzasını bekliyor; içerik aynı.
-  await kitap.xlsx.load(Buffer.from(dosya.veri, "base64") as unknown as Parameters<typeof kitap.xlsx.load>[0]);
-
-  const satirlar: { tur: SatirTuru; malzemeAdi: string; miktar: string; stokDurumu: StokDurumu }[] = [];
-
-  kitap.eachSheet((sayfa) => {
-    sayfa.eachRow((satir) => {
-      // Şablonda iki blok yan yana olduğu için her iki bloğu da tarıyoruz.
-      const hucreler: string[] = [];
-      satir.eachCell({ includeEmpty: true }, (h) => {
-        const d = h.value;
-        hucreler.push(d === null || d === undefined ? "" : String(typeof d === "object" && "result" in d ? d.result : d).trim());
-      });
-
-      for (const baslangic of [0, 4]) {
-        const ad = hucreler[baslangic + 1] ?? "";
-        if (!ad) continue;
-        // Başlık satırlarını atla
-        if (/^malzeme ad/i.test(ad)) continue;
-        const miktar = (hucreler[baslangic + 2] ?? "").slice(0, 60);
-        const stokDurumu = stokNormalle(hucreler[baslangic + 3]);
-        // Miktar ve stok ikisi de boşsa muhtemelen bir grup başlığıdır (ör. "ET GRUBU").
-        const tur: SatirTuru = !miktar && !stokDurumu ? "baslik" : "urun";
-        satirlar.push({ tur, malzemeAdi: ad.slice(0, 300), miktar, stokDurumu });
-      }
-    });
-  });
-
-  return satirlar;
-}
-
 export async function POST(request: Request) {
   let govde: { metin?: string; dosyalar?: GelenDosya[] };
   try {
@@ -147,7 +113,7 @@ export async function POST(request: Request) {
   const excelSatirlari: { tur: SatirTuru; malzemeAdi: string; miktar: string; stokDurumu: StokDurumu }[] = [];
   for (const d of excelDosyalari) {
     try {
-      excelSatirlari.push(...(await excelOku(d)));
+      excelSatirlari.push(...(await excelOku(d.veri)));
     } catch {
       return NextResponse.json(
         { hata: `Excel dosyası okunamadı: ${d.ad ?? "dosya"}` },
